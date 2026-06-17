@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/clotherp
     username: postgres
-    password: Root@123
+    password: postgres@123
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -17,12 +17,14 @@ spring:
     redis:
       host: localhost
       port: 6379
+      repositories:
+        enabled: false
 
 server:
   port: 8080
 
 app:
   jwt:
-    secret: clotherp-super-secret-jwt-key-minimum-256-bits-long
-    expiration: 900000        # 15 minutes
-    refresh-expiration: 604800000  # 7 days
+    secret: ${JWT_SECRET:your-very-long-secret-key-at-least-32-chars}
+    expiration: 900000          # 15 min
+    refresh-expiration: 604800000 # 7 days (matches Redis TTL if you set it accordingly)

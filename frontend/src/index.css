@@ -1,0 +1,5 @@
+* { box-sizing: border-box; }
+body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f8fafc; }
+button { padding: 0.4rem 0.8rem; background: #0b4f6c; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+button:disabled { opacity: 0.5; }
+input, select { padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px; }

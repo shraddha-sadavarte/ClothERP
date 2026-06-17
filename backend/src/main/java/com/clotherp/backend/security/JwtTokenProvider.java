@@ -1,8 +1,10 @@
 package com.clotherp.backend.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
@@ -14,7 +16,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
-// security/JwtTokenProvider.java
+@Slf4j
 @Component
 public class JwtTokenProvider {
 
@@ -38,42 +40,54 @@ public class JwtTokenProvider {
             claims.put("branchId", up.getBranchId());
         }
         return Jwts.builder()
-            .claims(claims)
-            .subject(userDetails.getUsername())
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
-            .signWith(getSigningKey())
-            .compact();
+                .claims(claims)
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + jwtExpiration))
+                .signWith(getSigningKey())
+                .compact();
     }
 
     public String generateRefreshToken(UserDetails userDetails) {
-        Map<String, Object> claims = new HashMap<>();
         return Jwts.builder()
-            .claims(claims)
-            .subject(userDetails.getUsername())
-            .issuedAt(new Date())
-            .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
-            .signWith(getSigningKey())
-            .compact();
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + refreshExpiration))
+                .signWith(getSigningKey())
+                .compact();
     }
 
     public String extractUsername(String token) {
-        return extractClaim(token, Claims::getSubject);
+        try {
+            return extractClaim(token, Claims::getSubject);
+        } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Failed to extract username from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public boolean validateToken(String token, UserDetails userDetails) {
-        return extractUsername(token).equals(userDetails.getUsername())
-               && !isTokenExpired(token);
+        try {
+            String username = extractUsername(token);
+            return username != null && username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+        } catch (JwtException | IllegalArgumentException e) {
+            log.warn("Token validation failed: {}", e.getMessage());
+            return false;
+        }
     }
 
     private boolean isTokenExpired(String token) {
-        return extractClaim(token, Claims::getExpiration).before(new Date());
+        try {
+            return extractClaim(token, Claims::getExpiration).before(new Date());
+        } catch (JwtException e) {
+            return true;
+        }
     }
 
     private <T> T extractClaim(String token, Function<Claims, T> resolver) {
         Claims claims = Jwts.parser()
-            .verifyWith(getSigningKey()).build()
-            .parseSignedClaims(token).getPayload();
+                .verifyWith(getSigningKey()).build()
+                .parseSignedClaims(token).getPayload();
         return resolver.apply(claims);
     }
 }
