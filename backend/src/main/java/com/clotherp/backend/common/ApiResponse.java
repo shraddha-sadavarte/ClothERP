@@ -12,12 +12,14 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class ApiResponse<T> {
+public class ApiResponse<T>
+ {
     private boolean success;
     private int statusCode;
     private String message;
     private T data;
     private List<String> errors;
+    @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();
 
     public static <T> ApiResponse<T> ok(T data) {
@@ -40,4 +42,4 @@ public class ApiResponse<T> {
             .message(message)
             .timestamp(LocalDateTime.now()).build();
     }
-}
+ }

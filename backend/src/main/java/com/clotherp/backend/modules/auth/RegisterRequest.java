@@ -1,41 +1,31 @@
 package com.clotherp.backend.modules.auth;
 
-import java.util.UUID;
-
 import com.clotherp.backend.common.Role;
-
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
-import lombok.NoArgsConstructor;
+
+import java.util.UUID;
 
 @Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
 public class RegisterRequest {
-    
+
     @NotBlank(message = "Username is required")
+    @Size(min = 3, max = 50)
     private String username;
 
     @NotBlank(message = "Email is required")
-    @Email(message = "Email must be valid")
+    @Email(message = "Invalid email format")
     private String email;
 
     @NotBlank(message = "Password is required")
-    @Pattern(
-            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@#$%^&+=!]).{8,}$",
-            message = "Password must be at least 8 characters and include uppercase, lowercase, a number, and a special character"
-    )
+    @Size(min = 8, message = "Password must be at least 8 characters")
     private String password;
 
-    @NotNull(message = "Role is required")
-    private Role role;
+    private String fullName;
+
+    private Role role;      // ← no @NotNull — defaults handled in service
 
     private UUID branchId;
-
 }

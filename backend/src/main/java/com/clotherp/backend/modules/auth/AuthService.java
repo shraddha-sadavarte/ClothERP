@@ -9,4 +9,6 @@ public interface AuthService {
     void logout(String refreshToken);
     void changePassword(String username, ChangePasswordRequest request);
     UserDTO getCurrentUser(String username);
+    void registerFirstAdmin(RegisterRequest request);
+     
 }
