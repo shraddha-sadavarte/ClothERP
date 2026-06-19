@@ -67,8 +67,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedOrigins(List.of("http://localhost:5173")); // your frontend URL
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
@@ -90,96 +90,18 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .csrf(AbstractHttpConfigurer::disable)
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .sessionManagement(s ->
-                s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-
-                // ── Auth endpoints — always public ───────────────────────────
-                .requestMatchers(HttpMethod.POST,
-                    "/api/v1/auth/login",
-                    "/api/v1/auth/refresh",
-                    "/api/v1/auth/logout"
-                ).permitAll()
-
-                // ── First-run setup — public ONLY when no users exist ────────
-                // The controller itself blocks this once users exist
-                .requestMatchers(HttpMethod.POST,
-                    "/api/v1/auth/setup"
-                ).permitAll()
-
-                // ── Swagger (dev only) ───────────────────────────────────────
-                .requestMatchers(
-                    "/swagger-ui/**",
-                    "/swagger-ui.html",
-                    "/v3/api-docs/**"
-                ).permitAll()
-
-                // ── User management ──────────────────────────────────────────
-               .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").permitAll()
-
-                // ── Branch management ────────────────────────────────────────
-                .requestMatchers(HttpMethod.GET, "/api/v1/branches/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER")
-                .requestMatchers(HttpMethod.POST, "/api/v1/branches/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER")
-                .requestMatchers(HttpMethod.PUT, "/api/v1/branches/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER")
-                .requestMatchers(HttpMethod.DELETE, "/api/v1/branches/**")
-                    .hasRole("SUPER_ADMIN")
-
-                // ── Products ─────────────────────────────────────────────────
-                .requestMatchers(HttpMethod.GET, "/api/v1/products/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER",
-                                "SALES_EXECUTIVE", "CASHIER", "PURCHASE_MANAGER")
-                .requestMatchers(HttpMethod.POST, "/api/v1/products/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "PURCHASE_MANAGER")
-                .requestMatchers(HttpMethod.PUT, "/api/v1/products/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "PURCHASE_MANAGER")
-                .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER")
-
-                // ── Sales ────────────────────────────────────────────────────
-                .requestMatchers(HttpMethod.GET, "/api/v1/sales/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER",
-                                "SALES_EXECUTIVE", "CASHIER", "ACCOUNTANT")
-                .requestMatchers(HttpMethod.POST, "/api/v1/sales/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER",
-                                "SALES_EXECUTIVE")
-                .requestMatchers(HttpMethod.PATCH, "/api/v1/sales/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER",
-                                "SALES_EXECUTIVE", "CASHIER")
-
-                // ── Inventory ────────────────────────────────────────────────
-                .requestMatchers(HttpMethod.GET, "/api/v1/inventory/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "BRANCH_MANAGER",
-                                "WAREHOUSE_MANAGER", "PURCHASE_MANAGER")
-                .requestMatchers(HttpMethod.POST, "/api/v1/inventory/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "WAREHOUSE_MANAGER",
-                                "PURCHASE_MANAGER")
-
-                // ── Purchase ─────────────────────────────────────────────────
-                .requestMatchers(HttpMethod.GET, "/api/v1/purchase/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "PURCHASE_MANAGER",
-                                "BRANCH_MANAGER", "ACCOUNTANT")
-                .requestMatchers(HttpMethod.POST, "/api/v1/purchase/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "PURCHASE_MANAGER")
-
-                // ── Accounting ───────────────────────────────────────────────
-                .requestMatchers("/api/v1/accounting/**")
-                    .hasAnyRole("SUPER_ADMIN", "OWNER", "ACCOUNTANT")
-
-                // ── Admin only ───────────────────────────────────────────────
-                .requestMatchers("/api/v1/admin/**")
-                    .hasRole("SUPER_ADMIN")
-
-                // ── Everything else needs a valid JWT ────────────────────────
-                .anyRequest().authenticated()
-            )
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
-            .exceptionHandling(e -> e.authenticationEntryPoint(authEntryPoint()));
-
+                .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/refresh").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/register").hasAnyRole("SUPER_ADMIN", "OWNER")
+                        .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(e -> e.authenticationEntryPoint(authEntryPoint()));
         return http.build();
     }
 }

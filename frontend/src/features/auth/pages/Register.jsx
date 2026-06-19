@@ -14,17 +14,22 @@ import {
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
-// Allowed roles (must match backend enum)
-const ROLES = [
-  'SUPER_ADMIN',
-  'OWNER',
-  'BRANCH_MANAGER',
-  'SALES_EXECUTIVE',
-  'CASHIER',
-  'PURCHASE_MANAGER',
-  'WAREHOUSE_MANAGER',
-  'ACCOUNTANT',
-];
+  const SELF_REGISTER_ROLES = [
+    'CASHIER',
+    'WAREHOUSE_MANAGER',
+    'SALES_EXECUTIVE'
+  ];
+
+  const PRIVILEGED_ROLES = [
+    'SUPER_ADMIN',
+    'OWNER',
+    'BRANCH_MANAGER',
+    'PURCHASE_MANAGER',
+    'ACCOUNTANT',
+  ];
+
+  // All available roles
+  const ALL_ROLES = [...PRIVILEGED_ROLES, ...SELF_REGISTER_ROLES];
 
 export default function Register() {
   const navigate = useNavigate();
@@ -40,9 +45,13 @@ export default function Register() {
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
 
-  // Check if current user can register others (only SUPER_ADMIN or OWNER)
-  const canRegister = user?.permissions?.includes('ALL') || 
-                      ['SUPER_ADMIN', 'OWNER'].includes(user?.role);
+  // Check if user can register others with privileged roles
+  const canRegisterPrivileged = user?.permissions?.includes('ALL') || 
+                               ['SUPER_ADMIN', 'OWNER'].includes(user?.role);
+  
+  // Check if selected role requires admin approval
+  const selectedRolePrivileged = PRIVILEGED_ROLES.includes(form.role);
+ // const canRegisterSelectedRole = !selectedRolePrivileged || canRegisterPrivileged;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -112,10 +121,16 @@ export default function Register() {
         </Avatar>
         <Typography component="h1" variant="h5">Create Account</Typography>
 
-        {!canRegister && (
-          <Alert severity="info" sx={{ mt: 2, width: '100%' }}>
-            You are not authorized to create new users (requires SUPER_ADMIN or OWNER).
-            The server will reject the request if you don't have permission.
+        {selectedRolePrivileged && !canRegisterPrivileged && (
+          <Alert severity="warning" sx={{ mt: 2, width: '100%' }}>
+            The role <strong>{form.role}</strong> is restricted and requires admin approval.
+            Only SUPER_ADMIN or OWNER can create users with this role.
+          </Alert>
+        )}
+
+        {!selectedRolePrivileged && (
+          <Alert severity="success" sx={{ mt: 2, width: '100%' }}>
+            The role <strong>{form.role}</strong> can be self-registered.
           </Alert>
         )}
 
@@ -188,11 +203,13 @@ export default function Register() {
             value={form.role}
             onChange={handleChange}
             error={!!errors.role}
-            helperText={errors.role}
-            disabled={status === 'loading'}
+            helperText={errors.role || (selectedRolePrivileged ? '(Requires admin approval)' : '(Self-registrable)')}
+            disabled={status === 'loading' || (selectedRolePrivileged && !canRegisterPrivileged)}
           >
-            {ROLES.map((role) => (
-              <MenuItem key={role} value={role}>{role}</MenuItem>
+            {ALL_ROLES.map((role) => (
+              <MenuItem key={role} value={role}>
+                {role} {PRIVILEGED_ROLES.includes(role) ? '(Admin Only)' : '(Self-Register)'}
+              </MenuItem>
             ))}
           </TextField>
           <TextField
@@ -212,7 +229,7 @@ export default function Register() {
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
-            disabled={status === 'loading'}
+            disabled={status === 'loading' || (selectedRolePrivileged && !canRegisterPrivileged)}
           >
             {status === 'loading' ? 'Creating account...' : 'Register'}
           </Button>

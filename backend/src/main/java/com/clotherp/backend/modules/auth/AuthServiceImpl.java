@@ -1,7 +1,5 @@
 package com.clotherp.backend.modules.auth;
 
-import com.clotherp.backend.common.BusinessException;
-import com.clotherp.backend.common.Role;
 import com.clotherp.backend.modules.user.User;
 import com.clotherp.backend.modules.user.UserDTO;
 import com.clotherp.backend.modules.user.UserRepository;
@@ -15,6 +13,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -25,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -59,11 +59,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         try {
-            Authentication auth = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                    request.getUsername(), request.getPassword()));
-
-            // Reset failed attempts on success
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
+            );
+            // success – reset failed attempts
             user.setFailedAttempts(0);
             user.setLockedUntil(null);
             userRepository.save(user);
@@ -100,6 +99,22 @@ public class AuthServiceImpl implements AuthService {
                 HttpStatus.CONFLICT, "Email already registered");
         }
 
+        // Hybrid approach: check if requesting privileged role
+        if (isPrivilegedRole(request.getRole())) {
+            // Only authenticated admins can create privileged users
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth == null || !auth.isAuthenticated() || auth.getPrincipal().equals("anonymousUser")) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Only administrators can create users with privileged roles");
+            }
+
+            UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
+            if (!isAdminRole(userPrincipal.getRole())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Only SUPER_ADMIN or OWNER can create users with privileged roles");
+            }
+        }
+
         // Default to SALES_EXECUTIVE if role not provided
         Role role = request.getRole() != null
             ? request.getRole()
@@ -121,31 +136,6 @@ public class AuthServiceImpl implements AuthService {
             userDetailsService.loadUserByUsername(user.getUsername());
         return issueTokens(userDetails, user);
     }
-
-    // ── First-time admin setup (public endpoint, self-disabling) ─────────────
-
-    @Override
-    @Transactional
-    public void registerFirstAdmin(RegisterRequest request) {
-
-        if (userRepository.count() > 0) {
-            throw new BusinessException("Setup already completed.");
-        }
-
-        User user = User.builder()
-            .username(request.getUsername())
-            .email(request.getEmail())
-            .password(passwordEncoder.encode(request.getPassword()))
-            .fullName(request.getFullName())
-            .role(Role.SUPER_ADMIN)
-            .active(true)
-            .build();
-
-        userRepository.save(user);
-        log.info("First Super Admin created: {}", request.getUsername());
-    }
-
-    // ── Refresh token ─────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -204,8 +194,7 @@ public class AuthServiceImpl implements AuthService {
                 HttpStatus.BAD_REQUEST, "Current password is incorrect");
         }
         if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            throw new ResponseStatusException(
-                HttpStatus.BAD_REQUEST, "New password must differ from current password");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "New password must be different from the current password");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
