@@ -1,4 +1,5 @@
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Grid, Paper, Typography, Chip, Avatar, Alert,
 } from '@mui/material';
@@ -18,17 +19,20 @@ const rolePermissionMap = {
   ACCOUNTANT:       { color: '#059669', bg: '#d1fae5', label: 'Accountant' },
 };
 
+// Added 'path' to each module to map them to specific routes
 const moduleCards = [
-  { label: 'Users',       icon: <People />,           permission: 'USER_VIEW',        color: '#3b82f6', desc: 'Manage system users and roles' },
-  { label: 'Sales',       icon: <Store />,            permission: 'SALES_VIEW',       color: '#10b981', desc: 'View and create sales orders' },
-  { label: 'POS Billing', icon: <PointOfSale />,      permission: 'POS_BILLING',      color: '#f59e0b', desc: 'Point-of-sale billing terminal' },
-  { label: 'Inventory',   icon: <Inventory />,        permission: 'INVENTORY_VIEW',   color: '#8b5cf6', desc: 'Stock and warehouse management' },
-  { label: 'Accounting',  icon: <AccountBalance />,   permission: 'ACCOUNTING_VIEW',  color: '#ef4444', desc: 'Ledger, GST and finance reports' },
-  { label: 'Admin',       icon: <AdminPanelSettings />, permission: 'ALL',            color: '#64748b', desc: 'System configuration' },
+  { label: 'Users',       icon: <People />,           permission: 'USER_VIEW',        color: '#3b82f6', desc: 'Manage system users and roles', path: '/users' },
+  { label: 'Sales',       icon: <Store />,            permission: 'SALES_VIEW',       color: '#10b981', desc: 'View and create sales orders', path: '/sales' },
+  { label: 'POS Billing', icon: <PointOfSale />,      permission: 'POS_BILLING',      color: '#f59e0b', desc: 'Point-of-sale billing terminal', path: '/pos' },
+  { label: 'Inventory',   icon: <Inventory />,        permission: 'INVENTORY_VIEW',   color: '#8b5cf6', desc: 'Stock and warehouse management', path: '/inventory' },
+  { label: 'Accounting',  icon: <AccountBalance />,   permission: 'ACCOUNTING_VIEW',  color: '#ef4444', desc: 'Ledger, GST and finance reports', path: '/accounting' },
+  { label: 'Admin',       icon: <AdminPanelSettings />, permission: 'ALL',            color: '#64748b', desc: 'System configuration', path: '/admin' },
 ];
 
 export default function DashboardHome() {
   const { user } = useAuth();
+  const navigate = useNavigate(); // Hook for programmatic navigation
+  
   const permissions = user?.permissions || [];
   const hasPermission = (p) => permissions.includes('ALL') || permissions.includes(p);
   const roleInfo = rolePermissionMap[user?.role] || {};
@@ -46,7 +50,7 @@ export default function DashboardHome() {
           color: '#fff',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: 2, textAlign: { xs: 'center', sm: 'left' } }}>
           <Avatar sx={{ width: 56, height: 56, bgcolor: 'rgba(255,255,255,0.2)', fontSize: 24 }}>
             {user?.username?.charAt(0).toUpperCase()}
           </Avatar>
@@ -54,7 +58,7 @@ export default function DashboardHome() {
             <Typography variant="h5" fontWeight={700}>
               Welcome back, {user?.username} 👋
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', justifyContent: { xs: 'center', sm: 'flex-start' }, gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
               <Chip
                 label={roleInfo.label || user?.role}
                 size="small"
@@ -79,6 +83,7 @@ export default function DashboardHome() {
           <Grid item xs={12} sm={6} md={4} key={mod.label}>
             <Paper
               elevation={0}
+              onClick={() => navigate(mod.path)} // Made the card clickable
               sx={{
                 p: 2.5, borderRadius: 2, border: '1px solid',
                 borderColor: 'divider', cursor: 'pointer',

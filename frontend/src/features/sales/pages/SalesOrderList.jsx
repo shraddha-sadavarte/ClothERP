@@ -11,7 +11,7 @@ import {
   Tooltip, Collapse,
 } from '@mui/material';
 import {
-  Add, ExpandMore, ExpandLess, ShoppingCart, DeleteOutline,
+  Add, ExpandMore, ExpandLess, ShoppingCart, DeleteOutlineOutlined,
 } from '@mui/icons-material';
 
 // ── Status chip colours ─────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ const inr = (v) =>
 // ── Item row inside dialog ───────────────────────────────────────────────────
 function ItemRow({ item, products, onChange, onRemove }) {
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ mb: { xs: 2, sm: 0 }, width: '100%' }}>
       <TextField
         select size="small" label="Product" sx={{ flex: 2 }}
         value={item.productId}
@@ -71,7 +71,7 @@ function ItemRow({ item, products, onChange, onRemove }) {
         inputProps={{ min: 0, max: 100 }}
       />
       <Tooltip title="Remove"><IconButton size="small" color="error" onClick={onRemove}>
-        <DeleteOutline fontSize="small" />
+        <DeleteOutlineOutlined fontSize="small" />
       </IconButton></Tooltip>
     </Stack>
   );
@@ -226,7 +226,7 @@ export default function SalesOrderList() {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>Sales Orders</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -235,7 +235,7 @@ export default function SalesOrderList() {
         </Box>
         {canCreate && (
           <Button variant="contained" startIcon={<Add />} onClick={openCreate}
-            sx={{ borderRadius: 2, fontWeight: 600 }}>
+            fullWidth={false} sx={{ borderRadius: 2, fontWeight: 600, width: { xs: '100%', sm: 'auto' } }}>
             New Order
           </Button>
         )}
@@ -244,8 +244,8 @@ export default function SalesOrderList() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <TableContainer>
-          <Table>
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
                 <TableCell />

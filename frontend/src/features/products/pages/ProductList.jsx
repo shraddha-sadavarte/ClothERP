@@ -49,7 +49,12 @@ export default function ProductList() {
     }
   }, [page, rowsPerPage]);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  useEffect(() => { 
+    const timer = setTimeout(() => {
+      fetchProducts();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchProducts]);
 
   const openCreate = () => {
     setEditing(null);
@@ -113,7 +118,7 @@ export default function ProductList() {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>Products</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -122,7 +127,7 @@ export default function ProductList() {
         </Box>
         {canCreate && (
           <Button variant="contained" startIcon={<Add />} onClick={openCreate}
-            sx={{ borderRadius: 2, fontWeight: 600 }}>
+            fullWidth={false} sx={{ borderRadius: 2, fontWeight: 600, width: { xs: '100%', sm: 'auto' } }}>
             Add Product
           </Button>
         )}
@@ -145,8 +150,8 @@ export default function ProductList() {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <TableContainer>
-          <Table>
+        <TableContainer sx={{ overflowX: 'auto' }}>
+          <Table sx={{ minWidth: 800 }}>
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
                 <TableCell>#</TableCell>

@@ -7,11 +7,11 @@ import {
   Box, Typography, Paper, Table, TableHead, TableBody, TableRow,
   TableCell, TableContainer, Chip, Alert, Button,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
-  Stack, MenuItem, Tabs, Tab, LinearProgress,
+  Stack, MenuItem, Tabs, Tab, LinearProgress, Grid
 } from '@mui/material';
-import {
-  Inventory2, Warning, SwapHoriz, AddCircleOutline,
-} from '@mui/icons-material';
+import Inventory2 from '@mui/icons-material/Inventory2';
+import Warning from '@mui/icons-material/Warning';
+import { AddCircleOutlineOutlined } from '@mui/icons-material';
 
 const TYPE_COLOR = {
   STOCK_IN: 'success',
@@ -44,7 +44,7 @@ export default function InventoryPage() {
   const { user } = useAuth();
   const canAdjust = usePermission('INVENTORY_ADJUST');
 
-  const branchId = user?.branchId;
+  const branchId = user?.branchId || "123e4567-e89b-12d3-a456-426614174000";
 
   const [tab, setTab]                 = useState(0);
   const [stock, setStock]             = useState([]);
@@ -83,8 +83,12 @@ export default function InventoryPage() {
       setLoading(false);
     }
   }, [branchId]);
-
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { 
+    const timer = setTimeout(() => {
+      fetchAll();
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchAll]);
 
   const openAdjust = async () => {
     setAdjError('');
@@ -138,7 +142,7 @@ export default function InventoryPage() {
   return (
     <Box>
       {/* Header */}
-      <Stack direction="row" alignItems="center" justifyContent="space-between" mb={3}>
+      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" spacing={2} mb={3}>
         <Box>
           <Typography variant="h4" fontWeight={700}>Inventory</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -146,40 +150,43 @@ export default function InventoryPage() {
           </Typography>
         </Box>
         {canAdjust && (
-          <Button variant="contained" startIcon={<AddCircleOutline />} onClick={openAdjust}
-            sx={{ borderRadius: 2, fontWeight: 600 }}>
+          <Button variant="contained" startIcon={<AddCircleOutlineOutlined />} onClick={openAdjust}
+            fullWidth={false} sx={{ borderRadius: 2, fontWeight: 600, width: { xs: '100%', sm: 'auto' } }}>
             Adjust Stock
           </Button>
         )}
       </Stack>
 
       {/* KPI strip */}
-      <Stack direction="row" spacing={2} mb={3} flexWrap="wrap">
+      <Grid container spacing={2} mb={3}>
         {[
           { label: 'Total Products', value: stock.length, color: '#3b82f6', icon: <Inventory2 /> },
           { label: 'Low Stock Alerts', value: lowStock.length, color: '#ef4444', icon: <Warning /> },
-          { label: 'Recent Transactions', value: transactions.length, color: '#8b5cf6', icon: <SwapHoriz /> },
         ].map((kpi) => (
-          <Paper key={kpi.label} elevation={0} sx={{
-            p: 2, borderRadius: 2, border: '1px solid', borderColor: 'divider', minWidth: 160, flex: 1,
-          }}>
-            <Stack direction="row" alignItems="center" spacing={1.5}>
-              <Box sx={{ color: kpi.color, display: 'flex' }}>{kpi.icon}</Box>
-              <Box>
-                <Typography variant="h5" fontWeight={700}>{kpi.value}</Typography>
-                <Typography variant="caption" color="text.secondary">{kpi.label}</Typography>
-              </Box>
-            </Stack>
-          </Paper>
+          <Grid item xs={12} sm={6} md={3} key={kpi.label}>
+            <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: kpi.color + '18', color: kpi.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {kpi.icon}
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">
+                    {kpi.label}
+                  </Typography>
+                  <Typography variant="h5" fontWeight={700}>{kpi.value}</Typography>
+                </Box>
+              </Stack>
+            </Paper>
+          </Grid>
         ))}
-      </Stack>
+      </Grid>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {loading && <LinearProgress sx={{ mb: 2 }} />}
 
       {/* Tabs */}
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
+      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 3 }}>
+        <Tabs value={tab} onChange={(e, v) => setTab(v)} variant="scrollable" scrollButtons="auto" sx={{ px: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
           <Tab label={`Stock Levels (${stock.length})`} />
           <Tab label={`Low Stock (${lowStock.length})`}
             sx={{ color: lowStock.length > 0 ? 'error.main' : undefined }} />
@@ -188,8 +195,8 @@ export default function InventoryPage() {
 
         {/* Tab 0 — Stock Levels */}
         {tab === 0 && (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 600 }}>
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
                   <TableCell>#</TableCell>
@@ -229,8 +236,8 @@ export default function InventoryPage() {
 
         {/* Tab 1 — Low Stock */}
         {tab === 1 && (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 600 }}>
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#fff3f3' } }}>
                   <TableCell>Product</TableCell>
@@ -265,8 +272,8 @@ export default function InventoryPage() {
 
         {/* Tab 2 — Transactions */}
         {tab === 2 && (
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ overflowX: 'auto' }}>
+            <Table sx={{ minWidth: 600 }}>
               <TableHead>
                 <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
                   <TableCell>Product</TableCell>
