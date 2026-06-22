@@ -24,7 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.Set;
+import com.clotherp.backend.common.*;
+import com.clotherp.backend.security.UserPrincipal;
 
 @Slf4j
 @Service
@@ -40,6 +41,18 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository        userRepository;
     private final PasswordEncoder       passwordEncoder;
     private final RefreshTokenStore     refreshTokenStore;
+
+    //helper: check if a role is considered "privileged"
+    private boolean isPrivilegedRole(Role role) {
+        return role == Role.SUPER_ADMIN || role == Role.OWNER || role == Role.BRANCH_MANAGER
+        || role == Role.PURCHASE_MANAGER || role == Role.WAREHOUSE_MANAGER || role == Role.ACCOUNTANT;
+    }
+
+    //Helper: check if a role string is admin-level (SUPER_ADMIN or OWNER)
+    private boolean isAdminRole(String roleName) {
+        return Role.SUPER_ADMIN.name().equals(roleName) || 
+                Role.OWNER.name().equals(roleName);
+    }
 
     // ── Login ────────────────────────────────────────────────────────────────
 
@@ -67,7 +80,7 @@ public class AuthServiceImpl implements AuthService {
             user.setLockedUntil(null);
             userRepository.save(user);
 
-            UserDetails userDetails = (UserDetails) auth.getPrincipal();
+            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             return issueTokens(userDetails, user);
 
         } catch (BadCredentialsException ex) {
@@ -227,5 +240,22 @@ public class AuthServiceImpl implements AuthService {
             .refreshToken(refreshToken)
             .user(UserDTO.fromEntity(user))
             .build();
+    }
+
+    @Override
+    @Transactional
+    public void registerFirstAdmin(RegisterRequest request) {
+       if(userRepository.count() > 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT, "Admin already exists");
+       }
+       User admin = User.builder().username(request.getUsername())
+            .email(request.getEmail())
+            .password(passwordEncoder.encode(request.getPassword()))
+            .fullName(request.getFullName())
+            .role(Role.SUPER_ADMIN)
+            .branchId(request.getBranchId())
+            .active(true)
+            .build();
+        userRepository.save(admin);         
     }
 }

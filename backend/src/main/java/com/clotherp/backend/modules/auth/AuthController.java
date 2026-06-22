@@ -1,7 +1,6 @@
 package com.clotherp.backend.modules.auth;
 
 import com.clotherp.backend.common.ApiResponse;
-import com.clotherp.backend.modules.user.User;
 import com.clotherp.backend.modules.user.UserDTO;
 import com.clotherp.backend.modules.user.UserRepository;
 import jakarta.validation.Valid;

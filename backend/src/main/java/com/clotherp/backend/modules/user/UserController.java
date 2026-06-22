@@ -32,4 +32,12 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserDTO>> getUser(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(userService.getUserById(id)));
     }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<UserDTO>> updateUser(
+            @PathVariable UUID id,
+            @RequestBody UpdateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateUser(id, request)));
+    }
 }
