@@ -183,7 +183,7 @@ export default function Register() {
             helperText={errors.role || (selectedRolePrivileged ? '(Requires admin approval)' : '(Self-registrable)')}
             disabled={status === 'loading' || (selectedRolePrivileged && !canRegisterPrivileged)}
           >
-            {ALL_ROLES.map((role) => (
+            {(canRegisterPrivileged ? ALL_ROLES : SELF_REGISTER_ROLES).map((role) => (
               <MenuItem key={role} value={role}>
                 {role} {PRIVILEGED_ROLES.includes(role) ? '(Admin Only)' : '(Self-Register)'}
               </MenuItem>
@@ -199,11 +199,8 @@ export default function Register() {
               name="branchId" label="Branch" id="branchId"
               value={form.branchId} onChange={handleChange}
               error={!!errors.branchId}
-              helperText={errors.branchId || 'Select your branch'}
+              helperText={errors.branchId || (branchesLoading ? 'Loading branches...' : 'Select your branch')}
               disabled={status === 'loading' || branchesLoading}
-              InputProps={branchesLoading ? {
-                endAdornment: <CircularProgress size={20} sx={{ mr: 1 }} />,
-              } : undefined}
             >
               {branches.length === 0 && !branchesLoading ? (
                 <MenuItem value="" disabled>No branches available</MenuItem>

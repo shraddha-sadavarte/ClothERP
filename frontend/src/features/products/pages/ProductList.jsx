@@ -5,12 +5,17 @@ import {
   TableRow, TableCell, TableContainer, TablePagination,
   Button, Chip, CircularProgress, Alert, Dialog,
   DialogTitle, DialogContent, DialogActions, TextField,
-  InputAdornment, Stack, Tooltip, IconButton,
+  InputAdornment, Stack, Tooltip, IconButton, MenuItem
 } from '@mui/material';
 import {
-  Add, Search, Edit, Inventory2,
+  Add, Search, Edit, Inventory2, Delete
 } from '@mui/icons-material';
 import { usePermission } from '../../../hooks/usePermission';
+
+const CATEGORIES = ['Menswear', 'Womenswear', 'kidswear', 'Accessories', 'Footwear'];
+const MATERIALS = ['Cotton', 'Polyester', 'Wool', 'Silk', 'Denim', 'Leather', 'Synthetic', 'Blend'];
+const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
 
 const emptyForm = {
   name: '', sku: '', description: '', price: '',
@@ -33,6 +38,7 @@ export default function ProductList() {
   const [saving, setSaving] = useState(false);
 
   const canCreate = usePermission('PRODUCT_CREATE');
+  const isSuperAdmin = usePermission('ALL'); //super_admin check
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -115,6 +121,17 @@ export default function ProductList() {
       : true
   );
 
+  const handleDelete = async (id) => {
+    if(window.confirm('Are you sure you want to delete this product?')) {
+      try{
+        await productApi.delete(id);
+        fetchProducts();
+      } catch (err) {
+        alert(err.response?.data?.message || "Failed to delete product");
+      }
+    }
+  }
+
   return (
     <Box>
       {/* Header */}
@@ -162,7 +179,7 @@ export default function ProductList() {
                 <TableCell>Color</TableCell>
                 <TableCell>Price (₹)</TableCell>
                 <TableCell>Cost (₹)</TableCell>
-                {canCreate && <TableCell align="center">Action</TableCell>}
+                {(canCreate || isSuperAdmin) && <TableCell align="center">Action</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -189,13 +206,22 @@ export default function ProductList() {
                   <TableCell>
                     ₹{Number(p.cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </TableCell>
-                  {canCreate && (
+                  {(canCreate || isSuperAdmin) && (
                     <TableCell align="center">
-                      <Tooltip title="Edit">
-                        <IconButton size="small" onClick={() => openEdit(p)}>
-                          <Edit fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {canCreate && (
+                        <Tooltip title="Edit">
+                          <IconButton size="small" onClick={() => openEdit(p)}>
+                            <Edit fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {isSuperAdmin && (
+                        <Tooltip title="Delete">
+                          <IconButton size='small' color='error' onClick={() => handleDelete(p.id)}>
+                            <Delete fontSize='small' />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
@@ -238,14 +264,44 @@ export default function ProductList() {
                 onChange={(e) => setForm(f => ({ ...f, cost: e.target.value }))} />
             </Stack>
             <Stack direction="row" spacing={2}>
-              <TextField label="Category" fullWidth value={form.category}
-                onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))} />
-              <TextField label="Material" fullWidth value={form.material}
-                onChange={(e) => setForm(f => ({ ...f, material: e.target.value }))} />
+              <TextField
+                select
+                label="Category"
+                fullWidth
+                value={form.category}
+                onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
+              >
+                <MenuItem value=""><em>None</em></MenuItem>
+                {CATEGORIES.map((cat) => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </TextField>
+              <TextField
+                select
+                label="Material"
+                fullWidth
+                value={form.material}
+                onChange={(e) => setForm(f => ({ ...f, material: e.target.value }))}
+              >
+                <MenuItem value=""><em>None</em></MenuItem>
+                {MATERIALS.map((mat) => (
+                  <MenuItem key={mat} value={mat}>{mat}</MenuItem>
+                ))}
+              </TextField>
             </Stack>
             <Stack direction="row" spacing={2}>
-              <TextField label="Size" fullWidth value={form.size}
-                onChange={(e) => setForm(f => ({ ...f, size: e.target.value }))} />
+              <TextField
+                select
+                label="Size"
+                fullWidth
+                value={form.size}
+                onChange={(e) => setForm(f => ({ ...f, size: e.target.value }))}
+              >
+                <MenuItem value=""><em>None</em></MenuItem>
+                {SIZES.map((sz) => (
+                  <MenuItem key={sz} value={sz}>{sz}</MenuItem>
+                ))}
+              </TextField>
               <TextField label="Color" fullWidth value={form.color}
                 onChange={(e) => setForm(f => ({ ...f, color: e.target.value }))} />
             </Stack>
