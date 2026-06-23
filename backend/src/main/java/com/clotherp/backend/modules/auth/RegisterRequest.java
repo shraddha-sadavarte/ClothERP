@@ -3,6 +3,7 @@ package com.clotherp.backend.modules.auth;
 import com.clotherp.backend.common.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -27,5 +28,6 @@ public class RegisterRequest {
 
     private Role role;      // ← no @NotNull — defaults handled in service
 
+    @NotNull(message = "Branch is required")
     private UUID branchId;
 }

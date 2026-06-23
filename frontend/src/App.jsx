@@ -12,6 +12,13 @@ import Login from './features/auth/pages/Login';
 import Register from './features/auth/pages/Register';
 import UserList from './features/users/pages/UserList';
 import Profile from './features/auth/pages/Profile';
+import DashboardHome from './features/dashboard/DashboardHome';
+import InventoryPage from './features/inventory/pages/InventoryPage';
+import SalesOrderList from './features/sales/pages/SalesOrderList';
+import ProductList from './features/products/pages/ProductList';
+import POSPage from './features/pos/pages/POSPage';
+import AccountingPage from './features/accounting/pages/AccountingPage';
+import AdminPage from './features/admin/pages/AdminPage';
 
 // Protected route wrapper using useEffect to redirect
 function ProtectedRoute({ children }) {
@@ -69,9 +76,19 @@ function App() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to="/users" replace />} />
+              <Route index element={<DashboardHome />} />
               <Route path="users" element={<UserList />} />
               <Route path="profile" element={<Profile />} />
+              
+              {/* Added missing feature routes */}
+              <Route path="inventory" element={<InventoryPage />} />
+              <Route path="sales" element={<SalesOrderList />} />
+              <Route path="products" element={<ProductList />} />
+              
+              {/* Placeholders for future features */}
+              <Route path="pos" element={<POSPage />} />
+              <Route path="accounting" element={<AccountingPage />} />
+              <Route path="admin" element={<AdminPage />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/auth/login" replace />} /> {/* fallback to login */}

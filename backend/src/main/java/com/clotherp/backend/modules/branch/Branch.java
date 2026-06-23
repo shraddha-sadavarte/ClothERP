@@ -19,12 +19,25 @@ import lombok.Setter;
 @AllArgsConstructor
 public class Branch extends BaseEntity {
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String name;
+
+    @Column(unique = true, nullable = false, length = 20)
+    private String code;
 
     @Column(columnDefinition = "text")
     private String address;
 
+    @Column(length = 100)
+    private String city;
+
+    @Column(length = 100)
+    private String state;
+
+    @Column(name = "pin_code", length = 10)
+    private String pinCode;
+
+    @Column(length = 20)
     private String phone;
 
     @Builder.Default

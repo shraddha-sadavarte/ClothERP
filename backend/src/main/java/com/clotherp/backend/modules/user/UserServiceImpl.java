@@ -32,4 +32,22 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
         return UserDTO.fromEntity(user);
     }
+
+    @Override
+    public UserDTO updateUser(UUID id, UpdateUserRequest request) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + id));
+        
+        if (request.getBranchId() != null) {
+            user.setBranchId(request.getBranchId());
+        }
+        if (request.getRole() != null) {
+            user.setRole(request.getRole());
+        }
+        if (request.getActive() != null) {
+            user.setActive(request.getActive());
+        }
+        
+        return UserDTO.fromEntity(userRepository.save(user));
+    }
 }

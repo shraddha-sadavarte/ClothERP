@@ -4,7 +4,9 @@ import java.util.List;
 import java.util.UUID;
 
 public interface BranchService {
-    List<Branch> getAllActiveBranches();
-    Branch createBranch(Branch branch);
-    Branch getBranchById(UUID id);
+    List<BranchDTO> getAllActiveBranches();
+    BranchDTO createBranch(BranchDTO dto);
+    BranchDTO getBranchById(UUID id);
+    BranchDTO updateBranch(UUID id, BranchDTO dto);
+    void deactivateBranch(UUID id);
 }

@@ -44,13 +44,14 @@ public class AuthServiceImpl implements AuthService {
 
     //helper: check if a role is considered "privileged"
     private boolean isPrivilegedRole(Role role) {
-        return role == Role.SUPER_ADMIN || role == Role.OWNER || role == Role.BRANCH_MANAGER
+        return role == Role.SUPER_ADMIN || role == Role.ADMIN || role == Role.OWNER || role == Role.BRANCH_MANAGER
         || role == Role.PURCHASE_MANAGER || role == Role.WAREHOUSE_MANAGER || role == Role.ACCOUNTANT;
     }
 
-    //Helper: check if a role string is admin-level (SUPER_ADMIN or OWNER)
+    //Helper: check if a role string is admin-level (SUPER_ADMIN, ADMIN, or OWNER)
     private boolean isAdminRole(String roleName) {
         return Role.SUPER_ADMIN.name().equals(roleName) || 
+                Role.ADMIN.name().equals(roleName) ||
                 Role.OWNER.name().equals(roleName);
     }
 
@@ -243,8 +244,7 @@ String username = jwtTokenProvider.extractUsername(refreshToken);
 
     @Override
     @Transactional
-    public void registerFirstAdmin(RegisterRequest request)
-     {
+    public void registerFirstAdmin(RegisterRequest request) {
        if(userRepository.count() > 0) {
         throw new ResponseStatusException(HttpStatus.CONFLICT, "Admin already exists");
        }

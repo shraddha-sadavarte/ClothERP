@@ -19,7 +19,7 @@ public class UserController {
     private final UserService userService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','OWNER','BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','OWNER','BRANCH_MANAGER')")
     public ResponseEntity<ApiResponse<PageResponse<UserDTO>>> listUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -28,8 +28,16 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','OWNER','BRANCH_MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','OWNER','BRANCH_MANAGER')")
     public ResponseEntity<ApiResponse<UserDTO>> getUser(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.ok(userService.getUserById(id)));
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    public ResponseEntity<ApiResponse<UserDTO>> updateUser(
+            @PathVariable UUID id,
+            @RequestBody UpdateUserRequest request) {
+        return ResponseEntity.ok(ApiResponse.ok(userService.updateUser(id, request)));
     }
 }

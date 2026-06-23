@@ -5,4 +5,5 @@ export const userApi = {
   listUsers: (page = 0, size = 20) =>
     api.get('/users', { params: { page, size } }),
   getUserById: (id) => api.get(`/users/${id}`),
+  updateUser: (id, payload) => api.put(`/users/${id}`, payload),
 };

@@ -11,9 +11,10 @@ export function useAuth() {
     async (username, password) => {
       dispatch(authStart());
       try {
-        const result = await authApi.login(username, password);
+        const response = await authApi.login(username, password);
+        const result = response.data;
         dispatch(authSuccess(result));
-        return { success: true, data: result };
+        return { success:true, data: result };
       } catch (err) {
         const message = err.response?.data?.message || err.message || 'Login failed';
         dispatch(authFailure(message));
@@ -27,7 +28,8 @@ export function useAuth() {
     async (payload) => {
       dispatch(authStart());
       try {
-        const result = await authApi.register(payload);
+        const response = await authApi.register(payload);
+        const result = response.data;
         dispatch(authSuccess(result));
         return { success: true, data: result };
       } catch (err) {

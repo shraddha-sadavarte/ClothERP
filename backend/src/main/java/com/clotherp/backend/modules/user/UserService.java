@@ -9,4 +9,5 @@ public interface UserService {
     Page<UserDTO> getAllUsers(Pageable pageable);   
     UserDTO getUserById(UUID id);
     UserDTO getUserByUsername(String username);
+    UserDTO updateUser(UUID id, UpdateUserRequest request);
 }
