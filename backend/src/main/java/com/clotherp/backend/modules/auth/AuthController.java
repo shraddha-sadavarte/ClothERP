@@ -28,31 +28,33 @@ public class AuthController {
             ApiResponse.ok(authService.login(request), "Login successful"));
     }
 
-    // ── Register — SELF-DISABLING after first user exists ───────────────────
-    // No token needed. Works only when database has zero users.
-    // After first user is created, this returns 403 forever.
+    // ── Register — Supports self-registration for non-privileged roles ────────
+    // No token needed for SALES_EXECUTIVE and other non-privileged roles.
+    // Privileged roles (OWNER, BRANCH_MANAGER, etc.) require an admin JWT.
+    // First ever registration (no users in DB) always creates a SUPER_ADMIN.
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<String>> register(
             @Valid @RequestBody RegisterRequest request) {
 
-        // Block if ANY user already exists
-        if (userRepository.count() > 0) {
+        // Bootstrap: first ever user becomes SUPER_ADMIN
+        if (userRepository.count() == 0) {
+            authService.registerFirstAdmin(request);
             return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.error(403,
-                    "Registration is disabled. " +
-                    "Ask your Super Admin to create users from the Users module."));
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.ok(
+                    "Super Admin created successfully. Please login.",
+                    "Setup complete"));
         }
 
-        // First ever user is always SUPER_ADMIN
-        authService.registerFirstAdmin(request);
+        // Ongoing: delegate to service — it enforces role-based access internally
+        authService.register(request);
 
         return ResponseEntity
             .status(HttpStatus.CREATED)
             .body(ApiResponse.ok(
-                "Super Admin created successfully. Please login.",
-                "Setup complete"));
+                "Registration successful. Please login.",
+                "Registration complete"));
     }
 
     // ── Refresh token ────────────────────────────────────────────────────────

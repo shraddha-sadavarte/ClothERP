@@ -25,7 +25,7 @@ public class ProductController {
      * Create a new product. Requires ADMIN or MANAGER role.
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'OWNER')")
     public ResponseEntity<ApiResponse<ProductDTO>> createProduct(@Valid @RequestBody ProductDTO request) {
         ProductDTO created = productService.createProduct(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -66,7 +66,7 @@ public class ProductController {
      * Update a product. Requires ADMIN or MANAGER role.
      */
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'OWNER')")
     public ResponseEntity<ApiResponse<ProductDTO>> updateProduct(
             @PathVariable UUID id,
             @Valid @RequestBody ProductDTO request) {
@@ -78,7 +78,7 @@ public class ProductController {
      * Soft-delete a product. Requires ADMIN role only.
      */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteProduct(@PathVariable UUID id) {
         productService.deleteProduct(id);
         return ResponseEntity.ok(ApiResponse.ok(null, "Product deleted successfully"));

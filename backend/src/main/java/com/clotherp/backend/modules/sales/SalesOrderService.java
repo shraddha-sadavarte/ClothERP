@@ -3,6 +3,9 @@ package com.clotherp.backend.modules.sales;
 import com.clotherp.backend.modules.product.Product;
 import com.clotherp.backend.modules.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,14 +21,13 @@ public class SalesOrderService {
     private final SalesOrderRepository salesOrderRepository;
     private final ProductRepository productRepository; // needed to fetch Product entities
 
-    public List<SalesOrderDTO> getAllOrders() {
-        return salesOrderRepository.findAll().stream()
-                .map(this::mapToDTO)
-                .collect(Collectors.toList());
+    public Page<SalesOrderDTO> getAllOrders(Pageable pageable) {
+        return salesOrderRepository.findAllWithItemsAndProducts(pageable)
+                .map(this::mapToDTO);
     }
 
     public SalesOrderDTO getOrderById(UUID id) {
-        SalesOrder order = salesOrderRepository.findById(id)
+        SalesOrder order = salesOrderRepository.findByIdWithItemsAndProducts(id)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
         return mapToDTO(order);
     }

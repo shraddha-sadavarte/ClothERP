@@ -1,6 +1,5 @@
 package com.clotherp.backend.modules.product;
 
-import com.clotherp.backend.common.ApiResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   People, AdminPanelSettings, Store, Inventory,
-  PointOfSale, AccountBalance,
+  PointOfSale, AccountBalance, Category,
 } from '@mui/icons-material';
 
 const rolePermissionMap = {
@@ -19,8 +19,8 @@ const rolePermissionMap = {
   ACCOUNTANT:       { color: '#059669', bg: '#d1fae5', label: 'Accountant' },
 };
 
-// Added 'path' to each module to map them to specific routes
 const moduleCards = [
+  { label: 'Products',    icon: <Category />,         permission: 'PRODUCT_VIEW',     color: '#0891b2', desc: 'Manage product catalog', path: '/products' },
   { label: 'Users',       icon: <People />,           permission: 'USER_VIEW',        color: '#3b82f6', desc: 'Manage system users and roles', path: '/users' },
   { label: 'Sales',       icon: <Store />,            permission: 'SALES_VIEW',       color: '#10b981', desc: 'View and create sales orders', path: '/sales' },
   { label: 'POS Billing', icon: <PointOfSale />,      permission: 'POS_BILLING',      color: '#f59e0b', desc: 'Point-of-sale billing terminal', path: '/pos' },
@@ -31,7 +31,7 @@ const moduleCards = [
 
 export default function DashboardHome() {
   const { user } = useAuth();
-  const navigate = useNavigate(); // Hook for programmatic navigation
+  const navigate = useNavigate();
   
   const permissions = user?.permissions || [];
   const hasPermission = (p) => permissions.includes('ALL') || permissions.includes(p);
@@ -83,7 +83,7 @@ export default function DashboardHome() {
           <Grid item xs={12} sm={6} md={4} key={mod.label}>
             <Paper
               elevation={0}
-              onClick={() => navigate(mod.path)} // Made the card clickable
+              onClick={() => navigate(mod.path)}
               sx={{
                 p: 2.5, borderRadius: 2, border: '1px solid',
                 borderColor: 'divider', cursor: 'pointer',

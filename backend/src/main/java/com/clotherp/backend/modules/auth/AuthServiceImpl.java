@@ -24,6 +24,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.UUID;
+
 import com.clotherp.backend.common.*;
 import com.clotherp.backend.security.UserPrincipal;
 
@@ -140,7 +142,7 @@ public class AuthServiceImpl implements AuthService {
             .password(passwordEncoder.encode(request.getPassword()))
             .fullName(request.getFullName())
             .role(role)
-            .branchId(request.getBranchId())
+            .branchId(request.getBranchId() != null && !request.getBranchId().isBlank() ? UUID.fromString(request.getBranchId()) : null)
             .active(true)
             .build();
 
@@ -253,7 +255,9 @@ String username = jwtTokenProvider.extractUsername(refreshToken);
             .password(passwordEncoder.encode(request.getPassword()))
             .fullName(request.getFullName())
             .role(Role.SUPER_ADMIN)
-            .branchId(request.getBranchId())
+            .branchId(request.getBranchId() != null && !request.getBranchId().isBlank() 
+              ? UUID.fromString(request.getBranchId()) 
+              : null) 
             .active(true)
             .build();
         userRepository.save(admin);         
