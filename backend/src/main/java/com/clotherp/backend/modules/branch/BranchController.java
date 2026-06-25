@@ -51,7 +51,7 @@ public class BranchController {
 
     /** Soft-deactivate a branch — SUPER_ADMIN or ADMIN only */
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateBranch(@PathVariable UUID id) {
         branchService.deactivateBranch(id);
         return ResponseEntity.ok(ApiResponse.ok(null, "Branch deactivated successfully"));

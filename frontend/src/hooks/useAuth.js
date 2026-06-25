@@ -11,10 +11,10 @@ export function useAuth() {
     async (username, password) => {
       dispatch(authStart());
       try {
-        const response = await authApi.login(username, password);
-        const result = response.data;
-        dispatch(authSuccess(result));
-        return { success:true, data: result };
+        // ✅ authApi.login now returns the payload directly (accessToken, refreshToken, user)
+        const result = await authApi.login(username, password);
+        dispatch(authSuccess(result));   // result is the payload
+        return { success: true, data: result };
       } catch (err) {
         const message = err.response?.data?.message || err.message || 'Login failed';
         dispatch(authFailure(message));
@@ -28,8 +28,7 @@ export function useAuth() {
     async (payload) => {
       dispatch(authStart());
       try {
-        const response = await authApi.register(payload);
-        const result = response.data;
+        const result = await authApi.register(payload);
         dispatch(authSuccess(result));
         return { success: true, data: result };
       } catch (err) {
@@ -45,7 +44,7 @@ export function useAuth() {
     try {
       if (auth.refreshToken) await authApi.logout(auth.refreshToken);
     } catch {
-      // proceed with local logout regardless of server response
+      // ignore
     } finally {
       dispatch(logoutAction());
     }

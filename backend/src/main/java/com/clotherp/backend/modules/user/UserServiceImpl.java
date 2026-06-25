@@ -1,9 +1,9 @@
 package com.clotherp.backend.modules.user;
 
+import com.clotherp.backend.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
@@ -22,22 +22,21 @@ public class UserServiceImpl implements UserService {
     @Override
     public UserDTO getUserById(UUID id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
         return UserDTO.fromEntity(user);
     }
 
     @Override
     public UserDTO getUserByUsername(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("User with username: " + username));
         return UserDTO.fromEntity(user);
     }
 
     @Override
     public UserDTO updateUser(UUID id, UpdateUserRequest request) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + id));
-        
+                .orElseThrow(() -> new ResourceNotFoundException("User", id));
         if (request.getBranchId() != null) {
             user.setBranchId(request.getBranchId());
         }
@@ -47,7 +46,6 @@ public class UserServiceImpl implements UserService {
         if (request.getActive() != null) {
             user.setActive(request.getActive());
         }
-        
         return UserDTO.fromEntity(userRepository.save(user));
     }
 }

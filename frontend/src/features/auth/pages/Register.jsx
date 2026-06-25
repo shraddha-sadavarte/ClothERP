@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
-import { useAuth } from '../../../hooks/useAuth';
 import {
   Avatar,
   Button,
@@ -8,18 +7,19 @@ import {
   Typography,
   Box,
   Alert,
-  Paper,
   Link,
   MenuItem,
   CircularProgress,
 } from '@mui/material';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import { useAuth } from '../../../hooks/useAuth';
+import { useToast } from '../../../hooks/useToast';
 import { branchApi } from '../../branch/branchApi';
 
 const SELF_REGISTER_ROLES = [
   'CASHIER',
   'WAREHOUSE_MANAGER',
-  'SALES_EXECUTIVE'
+  'SALES_EXECUTIVE',
 ];
 
 const PRIVILEGED_ROLES = [
@@ -35,6 +35,7 @@ const ALL_ROLES = [...PRIVILEGED_ROLES, ...SELF_REGISTER_ROLES];
 export default function Register() {
   const navigate = useNavigate();
   const { register, status, user } = useAuth();
+  const { showToast } = useToast();
 
   const [form, setForm] = useState({
     username: '',
@@ -44,23 +45,23 @@ export default function Register() {
     role: 'CASHIER',
     branchId: '',
   });
-  const [errors, setErrors]           = useState({});
+  const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
-  const [branches, setBranches]       = useState([]);
-  const [branchesLoading, setBranchesLoading] = useState(false);
-  const [branchesError, setBranchesError]     = useState('');
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [branchesError, setBranchesError] = useState('');
 
-  const canRegisterPrivileged  = user?.permissions?.includes('ALL') ||
-                                 ['SUPER_ADMIN', 'OWNER'].includes(user?.role);
+  const canRegisterPrivileged =
+    user?.permissions?.includes('ALL') ||
+    ['SUPER_ADMIN', 'OWNER'].includes(user?.role);
   const selectedRolePrivileged = PRIVILEGED_ROLES.includes(form.role);
 
   // Fetch active branches on mount
   useEffect(() => {
-    setBranchesLoading(true);
-    branchApi.listActive()
+    branchApi
+      .listActive()
       .then((res) => {
-        // api interceptor already unwraps response.data, so res is ApiResponse
-        setBranches(res.data ?? []);
+        setBranches(res ?? []);
       })
       .catch(() => setBranchesError('Could not load branches. Please refresh.'))
       .finally(() => setBranchesLoading(false));
@@ -85,12 +86,13 @@ export default function Register() {
     } else if (form.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&+=!])/.test(form.password)) {
-      newErrors.password = 'Must include uppercase, lowercase, number, and special character';
+      newErrors.password =
+        'Must include uppercase, lowercase, number, and special character';
     }
     if (form.password !== form.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    if (!form.role)     newErrors.role     = 'Role is required';
+    if (!form.role) newErrors.role = 'Role is required';
     if (!form.branchId) newErrors.branchId = 'Branch is required';
     return newErrors;
   };
@@ -106,14 +108,15 @@ export default function Register() {
 
     const payload = {
       username: form.username.trim(),
-      email:    form.email.trim(),
+      email: form.email.trim(),
       password: form.password,
-      role:     form.role,
+      role: form.role,
       branchId: form.branchId,
     };
 
     const result = await register(payload);
     if (result.success) {
+      showToast('Account created successfully!', 'success');
       navigate('/');
     } else {
       setServerError(result.error || 'Registration failed');
@@ -121,89 +124,154 @@ export default function Register() {
   };
 
   return (
-    <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
+    <Box sx={{ width: '100%' }}>
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <Avatar sx={{ m: 1, bgcolor: 'secondary.main' }}>
-          <PersonAddIcon />
+        <Avatar sx={{ m: 1, bgcolor: 'secondary.main', width: 56, height: 56 }}>
+          <PersonAddIcon fontSize="large" />
         </Avatar>
-        <Typography component="h1" variant="h5">Create Account</Typography>
+        <Typography component="h1" variant="h5" fontWeight={600}>
+          Create Account
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Register a new user account
+        </Typography>
 
         {selectedRolePrivileged && !canRegisterPrivileged && (
           <Alert severity="warning" sx={{ mt: 2, width: '100%' }}>
-            The role <strong>{form.role}</strong> is restricted and requires admin approval.
-            Only SUPER_ADMIN or OWNER can create users with this role.
+            The role <strong>{form.role}</strong> is restricted and requires admin
+            approval. Only SUPER_ADMIN or OWNER can create users with this role.
           </Alert>
         )}
 
         {!selectedRolePrivileged && (
           <Alert severity="success" sx={{ mt: 2, width: '100%' }}>
-            The role <strong>{form.role}</strong> can be self-registered.
+            The role <strong>{form.role}</strong> can be self‑registered.
           </Alert>
         )}
 
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, width: '100%' }}>
           <TextField
-            margin="normal" required fullWidth
-            id="username" label="Username" name="username"
+            margin="normal"
+            required
+            fullWidth
+            label="Username"
+            name="username"
             autoComplete="username"
-            value={form.username} onChange={handleChange}
-            error={!!errors.username} helperText={errors.username}
+            value={form.username}
+            onChange={handleChange}
+            error={!!errors.username}
+            helperText={errors.username}
             disabled={status === 'loading'}
+            size="medium"
           />
           <TextField
-            margin="normal" required fullWidth
-            id="email" label="Email Address" name="email"
+            margin="normal"
+            required
+            fullWidth
+            label="Email Address"
+            name="email"
             autoComplete="email"
-            value={form.email} onChange={handleChange}
-            error={!!errors.email} helperText={errors.email}
+            value={form.email}
+            onChange={handleChange}
+            error={!!errors.email}
+            helperText={errors.email}
             disabled={status === 'loading'}
+            size="medium"
           />
           <TextField
-            margin="normal" required fullWidth
-            name="password" label="Password" type="password"
-            id="password" autoComplete="new-password"
-            value={form.password} onChange={handleChange}
+            margin="normal"
+            required
+            fullWidth
+            name="password"
+            label="Password"
+            type="password"
+            autoComplete="new-password"
+            value={form.password}
+            onChange={handleChange}
             error={!!errors.password}
             helperText={errors.password || 'Min 8 chars, upper, lower, number, special'}
             disabled={status === 'loading'}
+            size="medium"
           />
           <TextField
-            margin="normal" required fullWidth
-            name="confirmPassword" label="Confirm Password" type="password"
-            id="confirmPassword"
-            value={form.confirmPassword} onChange={handleChange}
-            error={!!errors.confirmPassword} helperText={errors.confirmPassword}
+            margin="normal"
+            required
+            fullWidth
+            name="confirmPassword"
+            label="Confirm Password"
+            type="password"
+            value={form.confirmPassword}
+            onChange={handleChange}
+            error={!!errors.confirmPassword}
+            helperText={errors.confirmPassword}
             disabled={status === 'loading'}
+            size="medium"
           />
           <TextField
-            margin="normal" required fullWidth select
-            name="role" label="Role" id="role"
-            value={form.role} onChange={handleChange}
+            margin="normal"
+            required
+            fullWidth
+            select
+            name="role"
+            label="Role"
+            value={form.role}
+            onChange={handleChange}
             error={!!errors.role}
-            helperText={errors.role || (selectedRolePrivileged ? '(Requires admin approval)' : '(Self-registrable)')}
-            disabled={status === 'loading' || (selectedRolePrivileged && !canRegisterPrivileged)}
+            helperText={
+              errors.role ||
+              (selectedRolePrivileged
+                ? '(Requires admin approval)'
+                : '(Self‑registrable)')
+            }
+            disabled={
+              status === 'loading' ||
+              (selectedRolePrivileged && !canRegisterPrivileged)
+            }
+            size="medium"
           >
-            {(canRegisterPrivileged ? ALL_ROLES : SELF_REGISTER_ROLES).map((role) => (
-              <MenuItem key={role} value={role}>
-                {role} {PRIVILEGED_ROLES.includes(role) ? '(Admin Only)' : '(Self-Register)'}
-              </MenuItem>
-            ))}
+            {(canRegisterPrivileged ? ALL_ROLES : SELF_REGISTER_ROLES).map(
+              (role) => (
+                <MenuItem key={role} value={role}>
+                  {role}{' '}
+                  {PRIVILEGED_ROLES.includes(role) ? '(Admin Only)' : '(Self-Register)'}
+                </MenuItem>
+              )
+            )}
           </TextField>
 
-          {/* ── Branch Dropdown ─────────────────────────────────────────── */}
           {branchesError ? (
-            <Alert severity="error" sx={{ mt: 1 }}>{branchesError}</Alert>
+            <Alert severity="error" sx={{ mt: 1 }}>
+              {branchesError}
+            </Alert>
           ) : (
             <TextField
-              margin="normal" required fullWidth select
-              name="branchId" label="Branch" id="branchId"
-              value={form.branchId} onChange={handleChange}
+              margin="normal"
+              required
+              fullWidth
+              select
+              name="branchId"
+              label="Branch"
+              value={form.branchId}
+              onChange={handleChange}
               error={!!errors.branchId}
-              helperText={errors.branchId || (branchesLoading ? 'Loading branches...' : 'Select your branch')}
+              helperText={
+                errors.branchId ||
+                (branchesLoading ? 'Loading branches...' : 'Select your branch')
+              }
               disabled={status === 'loading' || branchesLoading}
+              size="medium"
+              InputProps={
+                branchesLoading
+                  ? {
+                      endAdornment: <CircularProgress size={20} sx={{ mr: 1 }} />,
+                    }
+                  : undefined
+              }
             >
               {branches.length === 0 && !branchesLoading ? (
-                <MenuItem value="" disabled>No branches available</MenuItem>
+                <MenuItem value="" disabled>
+                  No branches available
+                </MenuItem>
               ) : (
                 branches.map((b) => (
                   <MenuItem key={b.id} value={b.id}>
@@ -214,21 +282,33 @@ export default function Register() {
             </TextField>
           )}
 
-          {serverError && <Alert severity="error" sx={{ mt: 2 }}>{serverError}</Alert>}
+          {serverError && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {serverError}
+            </Alert>
+          )}
 
           <Button
-            type="submit" fullWidth variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-            disabled={status === 'loading' || (selectedRolePrivileged && !canRegisterPrivileged)}
+            type="submit"
+            fullWidth
+            variant="contained"
+            size="large"
+            sx={{ mt: 3, mb: 2, py: 1.5 }}
+            disabled={
+              status === 'loading' ||
+              (selectedRolePrivileged && !canRegisterPrivileged)
+            }
           >
             {status === 'loading' ? 'Creating account...' : 'Register'}
           </Button>
           <Typography variant="body2" align="center">
             Already have an account?{' '}
-            <Link component={RouterLink} to="/auth/login">Sign In</Link>
+            <Link component={RouterLink} to="/auth/login" fontWeight={600}>
+              Sign In
+            </Link>
           </Typography>
         </Box>
       </Box>
-    </Paper>
+    </Box>
   );
 }

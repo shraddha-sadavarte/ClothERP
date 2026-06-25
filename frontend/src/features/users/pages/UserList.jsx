@@ -1,12 +1,32 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { userApi } from '../userApi';
 import { usePermission } from '../../../hooks/usePermission';
+import { useToast } from '../../../hooks/useToast';
+import PageHeader from '../../../components/common/PageHeader';
 import {
-  Box, Typography, Alert, CircularProgress, Paper,
-  Table, TableBody, TableCell, TableContainer,
-  TableHead, TableRow, TablePagination, Chip,
-  Button, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, MenuItem, Stack, IconButton, Tooltip
+  Box,
+  Typography,
+  Alert,
+  CircularProgress,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  Chip,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Stack,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import { Edit } from '@mui/icons-material';
 import { branchApi } from '../../branch/branchApi';
@@ -26,26 +46,26 @@ const roleColors = {
 const ROLES = Object.keys(roleColors);
 
 export default function UserList() {
+  const { showToast } = useToast();
+  const canView = usePermission('USER_VIEW');
+  const isSuperAdmin = usePermission('ALL');
+
+  // ── State ──
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalElements, setTotalElements] = useState(0);
-
-  const canView = usePermission('USER_VIEW');
-  const isSuperAdmin = usePermission('ALL'); // Usually only SUPER_ADMIN can edit roles/branches
 
   const [editOpen, setEditOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editForm, setEditForm] = useState({ role: '', branchId: '', active: true });
   const [saving, setSaving] = useState(false);
 
-  // Active branches state
   const [branches, setBranches] = useState([]);
-  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesLoading, setBranchesLoading] = useState(true);
 
-  // Add User state
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({
     username: '',
@@ -59,55 +79,49 @@ export default function UserList() {
   const [addServerError, setAddServerError] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const isMounted = useRef(true);
+  const mountedRef = useRef(true);
 
+  // ── Fetch branches ──
   useEffect(() => {
-    isMounted.current = true;
-    return () => { isMounted.current = false; };
-  }, []);
-
-  // Fetch branches on mount
-  useEffect(() => {
-    setBranchesLoading(true);
-    branchApi.listActive()
+    branchApi
+      .listActive()
       .then((res) => {
-        if (isMounted.current) {
-          setBranches(res.data ?? []);
-        }
+        if (mountedRef.current) setBranches(res ?? []);
       })
-      .catch((err) => console.error('Failed to load branches', err))
+      .catch(() => console.error('Failed to load branches'))
       .finally(() => {
-        if (isMounted.current) {
-          setBranchesLoading(false);
-        }
+        if (mountedRef.current) setBranchesLoading(false);
       });
   }, []);
 
-  const fetchUsers = async () => {
+  // ── Fetch users ──
+  const fetchUsers = useCallback(async () => {
     if (!canView) return;
-    setLoading(true);
     setError(null);
     try {
-      const response = await userApi.listUsers(page, rowsPerPage);
-      const data = response.data;
-      if (isMounted.current) {
+      const data = await userApi.listUsers(page, rowsPerPage);
+      if (mountedRef.current) {
         setUsers(data.content || []);
         setTotalElements(data.totalElements || 0);
       }
     } catch (err) {
-      if (isMounted.current) {
+      if (mountedRef.current) {
         setError(err.response?.data?.message || 'Failed to load users');
       }
     } finally {
-      if (isMounted.current) setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => fetchUsers(), 0);
-    return () => clearTimeout(timer);
   }, [page, rowsPerPage, canView]);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchUsers();
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [fetchUsers]);
+
+  // ── Edit handlers ──
   const openEdit = (u) => {
     setEditingUser(u);
     setEditForm({
@@ -122,7 +136,6 @@ export default function UserList() {
     if (!editingUser) return;
     setSaving(true);
     try {
-      // Map empty string to null so backend JAXB/Jackson doesn't fail parsing UUID
       const payload = {
         role: editForm.role,
         branchId: editForm.branchId || null,
@@ -130,15 +143,17 @@ export default function UserList() {
       };
       await userApi.updateUser(editingUser.id, payload);
       setEditOpen(false);
-      fetchUsers();
+      showToast('User updated successfully', 'success');
+      setLoading(true);
+      await fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.message || 'Failed to update user');
+      showToast(err.response?.data?.message || 'Failed to update user', 'error');
     } finally {
       setSaving(false);
     }
   };
 
-  // Add User Handlers
+  // ── Add user handlers ──
   const validateAddForm = () => {
     const newErrors = {};
     if (!addForm.username.trim()) newErrors.username = 'Username is required';
@@ -152,12 +167,13 @@ export default function UserList() {
     } else if (addForm.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
     } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&+=!])/.test(addForm.password)) {
-      newErrors.password = 'Must include uppercase, lowercase, number, and special character';
+      newErrors.password =
+        'Must include uppercase, lowercase, number, and special character';
     }
     if (addForm.password !== addForm.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
     }
-    if (!addForm.role)     newErrors.role     = 'Role is required';
+    if (!addForm.role) newErrors.role = 'Role is required';
     if (!addForm.branchId) newErrors.branchId = 'Branch is required';
     return newErrors;
   };
@@ -193,11 +209,11 @@ export default function UserList() {
         role: addForm.role,
         branchId: addForm.branchId || null,
       };
-
-      // Call authApi.register directly so it doesn't auto-login the new user
       await authApi.register(payload);
       setAddOpen(false);
-      fetchUsers();
+      showToast('User created successfully', 'success');
+      setLoading(true);
+      await fetchUsers();
     } catch (err) {
       setAddServerError(err.response?.data?.message || 'Failed to create user');
     } finally {
@@ -215,20 +231,28 @@ export default function UserList() {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700}>
-          Users
-        </Typography>
-        {isSuperAdmin && (
-          <Button variant="contained" onClick={openAdd} sx={{ fontWeight: 600 }}>
-            Add User
-          </Button>
-        )}
-      </Stack>
-      
+      <PageHeader
+        title="Users"
+        subtitle="Manage system users and roles"
+        actions={
+          isSuperAdmin && (
+            <Button variant="contained" onClick={openAdd} sx={{ fontWeight: 600 }}>
+              Add User
+            </Button>
+          )
+        }
+      />
+
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+        }}
+      >
         <TableContainer sx={{ overflowX: 'auto' }}>
           <Table sx={{ minWidth: 600 }}>
             <TableHead>
@@ -270,7 +294,7 @@ export default function UserList() {
                       />
                     </TableCell>
                     <TableCell sx={{ fontSize: '0.9rem' }}>
-                      {branches.find(b => b.id === u.branchId)?.name || 'Not Assigned'}
+                      {branches.find((b) => b.id === u.branchId)?.name || 'Not Assigned'}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -300,7 +324,7 @@ export default function UserList() {
           count={totalElements}
           rowsPerPage={rowsPerPage}
           page={page}
-          onPageChange={(e, newPage) => setPage(newPage)}
+          onPageChange={(_, newPage) => setPage(newPage)}
           onRowsPerPageChange={(e) => {
             setRowsPerPage(parseInt(e.target.value, 10));
             setPage(0);
@@ -308,26 +332,38 @@ export default function UserList() {
         />
       </Paper>
 
-      {/* Edit User Dialog */}
-      <Dialog open={editOpen} onClose={() => !saving && setEditOpen(false)} maxWidth="sm" fullWidth>
+      {/* ── Edit User Dialog ── */}
+      <Dialog
+        open={editOpen}
+        onClose={() => !saving && setEditOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 700 }}>Edit User</DialogTitle>
         <DialogContent dividers>
           {editingUser && (
             <Stack spacing={3} sx={{ mt: 1 }}>
               <Box>
-                <Typography variant="subtitle2" color="text.secondary">Username</Typography>
-                <Typography variant="body1" fontWeight={600}>{editingUser.username}</Typography>
+                <Typography variant="subtitle2" color="text.secondary">
+                  Username
+                </Typography>
+                <Typography variant="body1" fontWeight={600}>
+                  {editingUser.username}
+                </Typography>
               </Box>
-              
+
               <TextField
                 select
                 label="Role"
                 fullWidth
                 value={editForm.role}
                 onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                disabled={saving}
               >
                 {ROLES.map((r) => (
-                  <MenuItem key={r} value={r}>{r}</MenuItem>
+                  <MenuItem key={r} value={r}>
+                    {r}
+                  </MenuItem>
                 ))}
               </TextField>
 
@@ -338,6 +374,7 @@ export default function UserList() {
                 value={editForm.branchId || ''}
                 onChange={(e) => setEditForm({ ...editForm, branchId: e.target.value })}
                 helperText="Select branch"
+                disabled={saving || branchesLoading}
               >
                 <MenuItem value="" disabled={branches.length > 0}>
                   {branchesLoading ? 'Loading branches...' : 'Unassigned / Select branch'}
@@ -354,7 +391,10 @@ export default function UserList() {
                 label="Account Status"
                 fullWidth
                 value={editForm.active ? 'true' : 'false'}
-                onChange={(e) => setEditForm({ ...editForm, active: e.target.value === 'true' })}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, active: e.target.value === 'true' })
+                }
+                disabled={saving}
               >
                 <MenuItem value="true">Active</MenuItem>
                 <MenuItem value="false">Inactive</MenuItem>
@@ -363,18 +403,34 @@ export default function UserList() {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving} sx={{ fontWeight: 600 }}>
+          <Button onClick={() => setEditOpen(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving}
+            sx={{ fontWeight: 600 }}
+          >
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Add User Dialog */}
-      <Dialog open={addOpen} onClose={() => !adding && setAddOpen(false)} maxWidth="sm" fullWidth>
+      {/* ── Add User Dialog ── */}
+      <Dialog
+        open={addOpen}
+        onClose={() => !adding && setAddOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 700 }}>Add New User</DialogTitle>
         <DialogContent dividers>
-          {addServerError && <Alert severity="error" sx={{ mb: 2 }}>{addServerError}</Alert>}
+          {addServerError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {addServerError}
+            </Alert>
+          )}
           <Stack spacing={3} sx={{ mt: 1 }}>
             <TextField
               required
@@ -429,7 +485,9 @@ export default function UserList() {
               disabled={adding}
             >
               {ROLES.map((r) => (
-                <MenuItem key={r} value={r}>{r}</MenuItem>
+                <MenuItem key={r} value={r}>
+                  {r}
+                </MenuItem>
               ))}
             </TextField>
             <TextField
@@ -451,8 +509,15 @@ export default function UserList() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setAddOpen(false)} disabled={adding}>Cancel</Button>
-          <Button variant="contained" onClick={handleAddSave} disabled={adding} sx={{ fontWeight: 600 }}>
+          <Button onClick={() => setAddOpen(false)} disabled={adding}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAddSave}
+            disabled={adding}
+            sx={{ fontWeight: 600 }}
+          >
             {adding ? 'Creating...' : 'Create User'}
           </Button>
         </DialogActions>

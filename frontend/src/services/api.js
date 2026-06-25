@@ -18,7 +18,23 @@ let isRefreshing = false;
 let queue = [];
 
 api.interceptors.response.use(
-  (response) => response.data,
+  (response) => {
+    // Always unwrap the data from ApiResponse if it's a success
+    if (response.data && response.data.success) {
+      return response.data.data;   // ✅ payload only
+    }
+    // If success is false, treat as an error
+    if (response.data && !response.data.success) {
+      return Promise.reject({
+        response: {
+          data: response.data,
+          status: response.data.statusCode || 500,
+        },
+      });
+    }
+    // Fallback (should not happen)
+    return response.data;
+  },
   async (error) => {
     const original = error.config;
     const isAuthEndpoint =
@@ -47,12 +63,13 @@ api.interceptors.response.use(
       isRefreshing = true;
       try {
         const res = await api.post('/auth/refresh', { refreshToken });
-        // Backend rotates refresh tokens, so store the NEW one too, not just
-        // the new access token — reusing the old refreshToken will now fail.
-        store.dispatch(setTokens({ accessToken: res.data.accessToken, refreshToken: res.data.refreshToken }));
-        queue.forEach((p) => p.resolve(res.data.accessToken));
+        // res is already the unwrapped payload { accessToken, refreshToken }
+        const newAccessToken = res.accessToken;
+        const newRefreshToken = res.refreshToken;
+        store.dispatch(setTokens({ accessToken: newAccessToken, refreshToken: newRefreshToken }));
+        queue.forEach((p) => p.resolve(newAccessToken));
         queue = [];
-        original.headers.Authorization = `Bearer ${res.data.accessToken}`;
+        original.headers.Authorization = `Bearer ${newAccessToken}`;
         return api(original);
       } catch (refreshErr) {
         queue.forEach((p) => p.reject(refreshErr));

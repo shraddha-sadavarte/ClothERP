@@ -1,5 +1,7 @@
 package com.clotherp.backend.modules.inventory;
 
+import com.clotherp.backend.common.BusinessException;
+import com.clotherp.backend.common.ResourceNotFoundException;
 import com.clotherp.backend.modules.product.Product;
 import com.clotherp.backend.modules.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +28,12 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     public InventoryItemDTO adjustStock(StockAdjustmentRequest request) {
         Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + request.getProductId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", request.getProductId()));
+
+        // Prevent adjustments on soft-deleted products
+        if (product.isDeleted()) {
+            throw new BusinessException("Cannot adjust stock for deleted product: " + product.getName());
+        }
 
         // Find existing inventory item or create a new one for this product+branch
         InventoryItem item = inventoryItemRepository
@@ -42,12 +49,15 @@ public class InventoryServiceImpl implements InventoryService {
             item.setRackLocation(request.getRackLocation());
         }
 
-        int newQty = item.getQuantity() + request.getQuantity();
-        if (newQty < 0) {
-            throw new IllegalStateException("Insufficient stock. Available: " + item.getAvailableQuantity()
+        // Check that available quantity (quantity - reserved) doesn't go negative
+        int newQuantity = item.getQuantity() + request.getQuantity();
+        int newAvailable = newQuantity - item.getReservedQuantity();
+        if (newAvailable < 0) {
+            throw new BusinessException("Insufficient available stock. Available: " + item.getAvailableQuantity()
                     + ", Requested: " + Math.abs(request.getQuantity()));
         }
-        item.setQuantity(newQty);
+
+        item.setQuantity(newQuantity);
         InventoryItem saved = inventoryItemRepository.save(item);
 
         // Record this change in the audit trail
@@ -70,11 +80,11 @@ public class InventoryServiceImpl implements InventoryService {
         // Deduct from source branch
         InventoryItem source = inventoryItemRepository
                 .findByProductIdAndBranchId(request.getProductId(), request.getFromBranchId())
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "No stock found for this product at the source branch."));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No stock found for this product at source branch with ID: " + request.getFromBranchId()));
 
         if (source.getAvailableQuantity() < request.getQuantity()) {
-            throw new IllegalStateException("Insufficient available stock at source branch. Available: "
+            throw new BusinessException("Insufficient available stock at source branch. Available: "
                     + source.getAvailableQuantity());
         }
 
@@ -115,7 +125,7 @@ public class InventoryServiceImpl implements InventoryService {
     public InventoryItemDTO getStockByProductAndBranch(UUID productId, UUID branchId) {
         return inventoryItemRepository.findByProductIdAndBranchId(productId, branchId)
                 .map(this::toItemDTO)
-                .orElseThrow(() -> new IllegalArgumentException("Stock record not found for given product and branch."));
+                .orElseThrow(() -> new ResourceNotFoundException("InventoryItem with productId: " + productId + " and branchId: " + branchId));
     }
 
     @Override

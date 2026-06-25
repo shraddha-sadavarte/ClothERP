@@ -1,5 +1,7 @@
 package com.clotherp.backend.modules.product;
 
+import com.clotherp.backend.common.BusinessException;
+import com.clotherp.backend.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,7 +20,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductDTO createProduct(ProductDTO request) {
         if (productRepository.existsBySku(request.getSku())) {
-            throw new IllegalArgumentException("Product with SKU '" + request.getSku() + "' already exists.");
+            throw new BusinessException("Product with SKU '" + request.getSku() + "' already exists.");
         }
         Product product = toEntity(request);
         return toDTO(productRepository.save(product));
@@ -27,7 +29,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public ProductDTO updateProduct(UUID id, ProductDTO request) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
@@ -44,7 +46,7 @@ public class ProductServiceImpl implements ProductService {
     public ProductDTO getProductById(UUID id) {
         return productRepository.findById(id)
                 .map(this::toDTO)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
     }
 
     @Override
@@ -52,7 +54,7 @@ public class ProductServiceImpl implements ProductService {
     public ProductDTO getProductBySku(String sku) {
         return productRepository.findBySku(sku)
                 .map(this::toDTO)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with SKU: " + sku));
+                .orElseThrow(() -> new ResourceNotFoundException("Product with SKU: " + sku));
     }
 
     @Override
@@ -64,7 +66,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     public void deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Product not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Product", id));
         product.setDeleted(true);
         productRepository.save(product);
     }

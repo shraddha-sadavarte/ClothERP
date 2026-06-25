@@ -1,9 +1,10 @@
 package com.clotherp.backend.modules.sales;
 
+import com.clotherp.backend.common.BusinessException;
+import com.clotherp.backend.common.ResourceNotFoundException;
 import com.clotherp.backend.modules.product.Product;
 import com.clotherp.backend.modules.product.ProductRepository;
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,44 +17,45 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class SalesOrderService {
 
     private final SalesOrderRepository salesOrderRepository;
-    private final ProductRepository productRepository; // needed to fetch Product entities
+    private final ProductRepository productRepository;
 
+    @Transactional(readOnly = true)
     public Page<SalesOrderDTO> getAllOrders(Pageable pageable) {
         return salesOrderRepository.findAllWithItemsAndProducts(pageable)
                 .map(this::mapToDTO);
     }
 
+    @Transactional(readOnly = true)
     public SalesOrderDTO getOrderById(UUID id) {
         SalesOrder order = salesOrderRepository.findByIdWithItemsAndProducts(id)
-                .orElseThrow(() -> new RuntimeException("Order not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder", id));
         return mapToDTO(order);
     }
 
-    @Transactional
     public SalesOrderDTO createOrder(CreateSalesOrderRequest request) {
-        // 1. Build the order (without items yet)
+        // Build the order
         SalesOrder order = SalesOrder.builder()
                 .orderNumber("SO-" + System.currentTimeMillis())
                 .customerId(request.getCustomerId())
                 .branchId(request.getBranchId())
                 .status(SalesOrderStatus.DRAFT)
                 .paymentStatus(PaymentStatus.PENDING)
+                .paymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : PaymentMethod.CASH)
                 .discountAmount(request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO)
                 .taxAmount(request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO)
                 .shippingAddress(request.getShippingAddress())
                 .notes(request.getNotes())
                 .build();
 
-        // 2. Map items – fetch Product entities and build SaleItem list
+        // Map items
         List<SaleItem> items = request.getItems().stream().map(reqItem -> {
-            // Fetch the product to set the relationship
             Product product = productRepository.findById(reqItem.getProductId())
-                    .orElseThrow(() -> new RuntimeException("Product not found: " + reqItem.getProductId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", reqItem.getProductId()));
 
-            // Compute line total: quantity * unitPrice * (1 - discountPercent/100)
             BigDecimal unitPrice = reqItem.getUnitPrice();
             int quantity = reqItem.getQuantity();
             BigDecimal discountPercent = reqItem.getDiscountPercent() != null ? reqItem.getDiscountPercent() : BigDecimal.ZERO;
@@ -72,25 +74,52 @@ public class SalesOrderService {
 
         order.setItems(items);
 
-        // 3. Compute order subtotal (sum of line totals)
+        // Compute totals
         BigDecimal subtotal = items.stream()
                 .map(SaleItem::getLineTotal)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         order.setSubtotal(subtotal);
 
-        // 4. Compute final total
         BigDecimal total = subtotal.subtract(order.getDiscountAmount()).add(order.getTaxAmount());
         order.setTotalAmount(total);
 
-        // 5. Save the order (cascade will save items)
+        // Save
         SalesOrder savedOrder = salesOrderRepository.save(order);
         return mapToDTO(savedOrder);
+    }
+
+    public SalesOrderDTO updateOrderStatus(UUID id, UpdateOrderStatusRequest request) {
+        SalesOrder order = salesOrderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder", id));
+
+        // Validate status transition
+        if (order.getStatus() == SalesOrderStatus.DELIVERED || order.getStatus() == SalesOrderStatus.CANCELLED) {
+            throw new BusinessException("Cannot change status of a " + order.getStatus() + " order");
+        }
+
+        // If transitioning from DRAFT to CONFIRMED, we should reserve stock (future feature)
+        // For now, just update status
+        order.setStatus(request.getStatus());
+        SalesOrder updated = salesOrderRepository.save(order);
+        return mapToDTO(updated);
+    }
+
+    public void cancelOrder(UUID id) {
+        SalesOrder order = salesOrderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("SalesOrder", id));
+
+        if (order.getStatus() == SalesOrderStatus.DELIVERED) {
+            throw new BusinessException("Delivered orders cannot be cancelled");
+        }
+
+        order.setStatus(SalesOrderStatus.CANCELLED);
+        salesOrderRepository.save(order);
+        // If stock was reserved (CONFIRMED or higher), we should release it (future feature)
     }
 
     // ── Mapping helpers ──
 
     private SalesOrderDTO mapToDTO(SalesOrder order) {
-        // Build the DTO using the builder (since @Builder exists on DTO)
         SalesOrderDTO.SalesOrderDTOBuilder builder = SalesOrderDTO.builder()
                 .id(order.getId())
                 .orderNumber(order.getOrderNumber())
@@ -98,6 +127,7 @@ public class SalesOrderService {
                 .branchId(order.getBranchId())
                 .status(order.getStatus())
                 .paymentStatus(order.getPaymentStatus())
+                .paymentMethod(order.getPaymentMethod())
                 .subtotal(order.getSubtotal())
                 .discountAmount(order.getDiscountAmount())
                 .taxAmount(order.getTaxAmount())
@@ -107,10 +137,6 @@ public class SalesOrderService {
                 .createdAt(order.getCreatedAt())
                 .updatedAt(order.getUpdatedAt());
 
-        // Map items (if any) – we can set them later, but we need to fetch product names/SKUs
-        // For simplicity, we'll just map the items without product details, or we can fetch them.
-        // Here we'll set a placeholder – you can enhance this later.
-        // For now, we can set items as an empty list or map them.
         if (order.getItems() != null && !order.getItems().isEmpty()) {
             List<SaleItemDTO> itemDTOs = order.getItems().stream()
                     .map(item -> SaleItemDTO.builder()

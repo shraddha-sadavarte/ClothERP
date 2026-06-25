@@ -9,9 +9,9 @@ export const inventoryApi = {
   getStockByProductAndBranch: (productId, branchId) =>
     api.get(`/inventory/product/${productId}/branch/${branchId}`),
 
-  // GET /api/v1/inventory/branch/:branchId/low-stock?threshold=5
+  // GET /api/v1/inventory/low-stock?branchId=...&threshold=...
   getLowStock: (branchId, threshold = 5) =>
-    api.get(`/inventory/branch/${branchId}/low-stock`, { params: { threshold } }),
+    api.get('/inventory/low-stock', { params: { branchId, threshold } }),
 
   // GET /api/v1/inventory/transactions/branch/:branchId
   getTransactionsByBranch: (branchId, page = 0, size = 20) =>

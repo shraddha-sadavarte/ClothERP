@@ -12,8 +12,11 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 
+import org.hibernate.annotations.Where;
+
 @Entity
 @Table(name = "products")
+@Where(clause = "is_deleted = false")
 @Getter
 @Setter
 @Builder

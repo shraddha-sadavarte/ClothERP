@@ -1,5 +1,7 @@
 package com.clotherp.backend.modules.customer;
 
+import com.clotherp.backend.common.BusinessException;
+import com.clotherp.backend.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +19,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     public Customer createCustomer(Customer customer) {
         if (customerRepository.findByPhone(customer.getPhone()).isPresent()) {
-            throw new IllegalArgumentException("Customer with this phone number already exists.");
+            throw new BusinessException("Customer with this phone number already exists.");
         }
         return customerRepository.save(customer);
     }
@@ -27,10 +29,9 @@ public class CustomerServiceImpl implements CustomerService {
         Customer existing = getCustomerById(id);
         existing.setFullName(details.getFullName());
         existing.setEmail(details.getEmail());
-        // Handle phone uniqueness if phone is changing
-        if (!existing.getPhone().equals(details.getPhone()) 
+        if (!existing.getPhone().equals(details.getPhone())
                 && customerRepository.findByPhone(details.getPhone()).isPresent()) {
-            throw new IllegalArgumentException("Customer with this phone number already exists.");
+            throw new BusinessException("Customer with this phone number already exists.");
         }
         existing.setPhone(details.getPhone());
         existing.setLoyaltyPoints(details.getLoyaltyPoints());
@@ -41,7 +42,7 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public Customer getCustomerById(UUID id) {
         return customerRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", id));
     }
 
     @Override

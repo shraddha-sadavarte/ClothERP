@@ -1,5 +1,6 @@
 package com.clotherp.backend.modules.branch;
 
+import com.clotherp.backend.common.BusinessException;
 import com.clotherp.backend.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ public class BranchServiceImpl implements BranchService {
     @Override
     public BranchDTO createBranch(BranchDTO dto) {
         if (branchRepository.existsByCode(dto.getCode())) {
-            throw new IllegalArgumentException("Branch code already exists: " + dto.getCode());
+            throw new BusinessException("Branch code already exists: " + dto.getCode());
         }
         Branch branch = toEntity(dto);
         return toDTO(branchRepository.save(branch));
@@ -39,13 +40,13 @@ public class BranchServiceImpl implements BranchService {
     public BranchDTO getBranchById(UUID id) {
         return branchRepository.findById(id)
                 .map(this::toDTO)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Branch", id));
     }
 
     @Override
     public BranchDTO updateBranch(UUID id, BranchDTO dto) {
         Branch branch = branchRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Branch", id));
         branch.setName(dto.getName());
         branch.setCode(dto.getCode());
         branch.setAddress(dto.getAddress());
@@ -60,7 +61,7 @@ public class BranchServiceImpl implements BranchService {
     @Override
     public void deactivateBranch(UUID id) {
         Branch branch = branchRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Branch not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Branch", id));
         branch.setActive(false);
         branchRepository.save(branch);
     }

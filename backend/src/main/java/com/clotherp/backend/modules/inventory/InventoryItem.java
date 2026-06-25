@@ -4,6 +4,7 @@ import com.clotherp.backend.common.BaseEntity;
 import com.clotherp.backend.modules.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Where;
 
 import java.util.UUID;
 
@@ -19,42 +20,27 @@ import java.util.UUID;
 @AllArgsConstructor
 public class InventoryItem extends BaseEntity {
 
-    /**
-     * The product this stock line belongs to.
-     */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
-    /**
-     * Which branch holds this stock.
-     */
     @Column(name = "branch_id", nullable = false)
     private UUID branchId;
 
-    /**
-     * Current on-hand quantity (never goes below 0).
-     */
     @Column(nullable = false)
     @Builder.Default
     private int quantity = 0;
 
-    /**
-     * Quantity reserved for open orders (not yet dispatched).
-     */
     @Column(name = "reserved_quantity", nullable = false)
     @Builder.Default
     private int reservedQuantity = 0;
 
-    /**
-     * Optional physical rack / shelf location in the warehouse.
-     */
     @Column(name = "rack_location")
     private String rackLocation;
 
-    /**
-     * Computed available quantity = quantity - reservedQuantity.
-     */
+    @Version
+    private Integer version;   // ✅ Add optimistic locking
+
     @Transient
     public int getAvailableQuantity() {
         return quantity - reservedQuantity;

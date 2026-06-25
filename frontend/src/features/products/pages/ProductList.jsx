@@ -1,30 +1,65 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { productApi } from '../productApi';
 import {
-  Box, Typography, Paper, Table, TableHead, TableBody,
-  TableRow, TableCell, TableContainer, TablePagination,
-  Button, Chip, CircularProgress, Alert, Dialog,
-  DialogTitle, DialogContent, DialogActions, TextField,
-  InputAdornment, Stack, Tooltip, IconButton, MenuItem
+  Box,
+  Paper,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
+  TablePagination,
+  Button,
+  Chip,
+  CircularProgress,
+  Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  InputAdornment,
+  Stack,
+  Tooltip,
+  IconButton,
+  MenuItem,
 } from '@mui/material';
 import {
-  Add, Search, Edit, Inventory2, Delete
+  Add,
+  Search,
+  Edit,
+  Inventory2,
+  Delete,
 } from '@mui/icons-material';
 import { usePermission } from '../../../hooks/usePermission';
+import { useToast } from '../../../hooks/useToast';
+import PageHeader from '../../../components/common/PageHeader';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 
-const CATEGORIES = ['Menswear', 'Womenswear', 'kidswear', 'Accessories', 'Footwear'];
+const CATEGORIES = ['Menswear', 'Womenswear', 'Kidswear', 'Accessories', 'Footwear'];
 const MATERIALS = ['Cotton', 'Polyester', 'Wool', 'Silk', 'Denim', 'Leather', 'Synthetic', 'Blend'];
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
 
-
 const emptyForm = {
-  name: '', sku: '', description: '', price: '',
-  cost: '', category: '', size: '', color: '', material: '',
+  name: '',
+  sku: '',
+  description: '',
+  price: '',
+  cost: '',
+  category: '',
+  size: '',
+  color: '',
+  material: '',
 };
 
 export default function ProductList() {
+  const { showToast } = useToast();
+  const canCreate = usePermission('PRODUCT_CREATE');
+  const isSuperAdmin = usePermission('ALL');
+
   const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -32,34 +67,40 @@ export default function ProductList() {
   const [search, setSearch] = useState('');
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState(null); // null = create, object = edit
+  const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const canCreate = usePermission('PRODUCT_CREATE');
-  const isSuperAdmin = usePermission('ALL'); //super_admin check
+  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
+
+  const mountedRef = useRef(true);
 
   const fetchProducts = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
-      const res = await productApi.listProducts(page, rowsPerPage);
-      const data = res.data; // ApiResponse -> Page<ProductDTO>
-      setProducts(data.content || []);
-      setTotal(data.totalElements || 0);
+      const data = await productApi.listProducts(page, rowsPerPage);
+      if (mountedRef.current) {
+        setProducts(data.content || []);
+        setTotal(data.totalElements || 0);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load products');
+      if (mountedRef.current) {
+        setError(err.response?.data?.message || 'Failed to load products');
+      }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [page, rowsPerPage]);
 
-  useEffect(() => { 
-    const timer = setTimeout(() => {
-      fetchProducts();
-    }, 0);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    mountedRef.current = true;
+    fetchProducts();
+    return () => {
+      mountedRef.current = false;
+    };
   }, [fetchProducts]);
 
   const openCreate = () => {
@@ -101,15 +142,31 @@ export default function ProductList() {
       };
       if (editing) {
         await productApi.update(editing.id, payload);
+        showToast('Product updated successfully', 'success');
       } else {
         await productApi.create(payload);
+        showToast('Product created successfully', 'success');
       }
       setDialogOpen(false);
-      fetchProducts();
+      setLoading(true);
+      await fetchProducts();
     } catch (err) {
       setFormError(err.response?.data?.message || 'Failed to save product');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await productApi.delete(deleteDialog.id);
+      showToast('Product deleted', 'success');
+      setLoading(true);
+      await fetchProducts();
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Delete failed', 'error');
+    } finally {
+      setDeleteDialog({ open: false, id: null });
     }
   };
 
@@ -121,54 +178,52 @@ export default function ProductList() {
       : true
   );
 
-  const handleDelete = async (id) => {
-    if(window.confirm('Are you sure you want to delete this product?')) {
-      try{
-        await productApi.delete(id);
-        fetchProducts();
-      } catch (err) {
-        alert(err.response?.data?.message || "Failed to delete product");
-      }
-    }
-  }
-
   return (
     <Box>
-      {/* Header */}
-      <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'flex-start', sm: 'center' }} justifyContent="space-between" spacing={2} mb={3}>
-        <Box>
-          <Typography variant="h4" fontWeight={700}>Products</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Manage your product catalogue
-          </Typography>
-        </Box>
-        {canCreate && (
-          <Button variant="contained" startIcon={<Add />} onClick={openCreate}
-            fullWidth={false} sx={{ borderRadius: 2, fontWeight: 600, width: { xs: '100%', sm: 'auto' } }}>
-            Add Product
-          </Button>
-        )}
-      </Stack>
+      <PageHeader
+        title="Products"
+        subtitle="Manage your product catalogue"
+        actions={
+          canCreate && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={openCreate}
+              sx={{ borderRadius: 2, fontWeight: 600 }}
+            >
+              Add Product
+            </Button>
+          )
+        }
+      />
 
-      {/* Search */}
       <TextField
         size="small"
         placeholder="Search by name, SKU or category…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        sx={{ mb: 2, width: 340 }}
+        sx={{ mb: 2, width: { xs: '100%', sm: 340 } }}
         InputProps={{
           startAdornment: (
-            <InputAdornment position="start"><Search fontSize="small" /></InputAdornment>
+            <InputAdornment position="start">
+              <Search fontSize="small" />
+            </InputAdornment>
           ),
         }}
       />
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+      <Paper
+        elevation={0}
+        sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+        }}
+      >
         <TableContainer sx={{ overflowX: 'auto' }}>
-          <Table sx={{ minWidth: 800 }}>
+          <Table sx={{ minWidth: 700 }}>
             <TableHead>
               <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
                 <TableCell>#</TableCell>
@@ -179,53 +234,68 @@ export default function ProductList() {
                 <TableCell>Color</TableCell>
                 <TableCell>Price (₹)</TableCell>
                 <TableCell>Cost (₹)</TableCell>
-                {(canCreate || isSuperAdmin) && <TableCell align="center">Action</TableCell>}
+                {(canCreate || isSuperAdmin) && (
+                  <TableCell align="center">Actions</TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
               {loading && displayed.length === 0 ? (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>
-                  <CircularProgress size={28} />
-                </TableCell></TableRow>
-              ) : displayed.length === 0 ? (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} /><br />
-                  No products found
-                </TableCell></TableRow>
-              ) : displayed.map((p, i) => (
-                <TableRow key={p.id} hover>
-                  <TableCell>{page * rowsPerPage + i + 1}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>{p.name}</TableCell>
-                  <TableCell><Chip label={p.sku} size="small" variant="outlined" /></TableCell>
-                  <TableCell>{p.category || '—'}</TableCell>
-                  <TableCell>{p.size || '—'}</TableCell>
-                  <TableCell>{p.color || '—'}</TableCell>
-                  <TableCell sx={{ fontWeight: 600, color: 'success.main' }}>
-                    ₹{Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                    <CircularProgress size={28} />
                   </TableCell>
-                  <TableCell>
-                    ₹{Number(p.cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </TableCell>
-                  {(canCreate || isSuperAdmin) && (
-                    <TableCell align="center">
-                      {canCreate && (
-                        <Tooltip title="Edit">
-                          <IconButton size="small" onClick={() => openEdit(p)}>
-                            <Edit fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {isSuperAdmin && (
-                        <Tooltip title="Delete">
-                          <IconButton size='small' color='error' onClick={() => handleDelete(p.id)}>
-                            <Delete fontSize='small' />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                  )}
                 </TableRow>
-              ))}
+              ) : displayed.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                    <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} />
+                    <br />
+                    No products found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                displayed.map((p, i) => (
+                  <TableRow key={p.id} hover>
+                    <TableCell>{page * rowsPerPage + i + 1}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{p.name}</TableCell>
+                    <TableCell>
+                      <Chip label={p.sku} size="small" variant="outlined" />
+                    </TableCell>
+                    <TableCell>{p.category || '—'}</TableCell>
+                    <TableCell>{p.size || '—'}</TableCell>
+                    <TableCell>{p.color || '—'}</TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: 'success.main' }}>
+                      ₹{Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell>
+                      ₹{Number(p.cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </TableCell>
+                    {(canCreate || isSuperAdmin) && (
+                      <TableCell align="center">
+                        {canCreate && (
+                          <Tooltip title="Edit">
+                            <IconButton size="small" onClick={() => openEdit(p)}>
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                        {isSuperAdmin && (
+                          <Tooltip title="Delete">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => setDeleteDialog({ open: true, id: p.id })}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </TableContainer>
@@ -236,44 +306,86 @@ export default function ProductList() {
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={(_, p) => setPage(p)}
-          onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
         />
       </Paper>
 
       {/* Create / Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => !saving && setDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle sx={{ fontWeight: 700 }}>
           {editing ? 'Edit Product' : 'Add New Product'}
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {formError && <Alert severity="error">{formError}</Alert>}
-            <Stack direction="row" spacing={2}>
-              <TextField label="Product Name *" fullWidth value={form.name}
-                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} />
-              <TextField label="SKU *" fullWidth value={form.sku}
-                onChange={(e) => setForm(f => ({ ...f, sku: e.target.value }))}
-                disabled={!!editing} />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Product Name *"
+                fullWidth
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                disabled={saving}
+              />
+              <TextField
+                label="SKU *"
+                fullWidth
+                value={form.sku}
+                onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                disabled={!!editing || saving}
+                helperText={editing ? 'SKU cannot be changed' : ''}
+              />
             </Stack>
-            <TextField label="Description" fullWidth multiline rows={2} value={form.description}
-              onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
-            <Stack direction="row" spacing={2}>
-              <TextField label="Selling Price (₹) *" type="number" fullWidth value={form.price}
-                onChange={(e) => setForm(f => ({ ...f, price: e.target.value }))} />
-              <TextField label="Cost Price (₹)" type="number" fullWidth value={form.cost}
-                onChange={(e) => setForm(f => ({ ...f, cost: e.target.value }))} />
+            <TextField
+              label="Description"
+              fullWidth
+              multiline
+              rows={2}
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              disabled={saving}
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Selling Price (₹) *"
+                type="number"
+                fullWidth
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                inputProps={{ step: 0.01, min: 0 }}
+                disabled={saving}
+              />
+              <TextField
+                label="Cost Price (₹)"
+                type="number"
+                fullWidth
+                value={form.cost}
+                onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
+                inputProps={{ step: 0.01, min: 0 }}
+                disabled={saving}
+              />
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 select
                 label="Category"
                 fullWidth
                 value={form.category}
-                onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                disabled={saving}
               >
                 <MenuItem value=""><em>None</em></MenuItem>
                 {CATEGORIES.map((cat) => (
-                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                  <MenuItem key={cat} value={cat}>
+                    {cat}
+                  </MenuItem>
                 ))}
               </TextField>
               <TextField
@@ -281,40 +393,69 @@ export default function ProductList() {
                 label="Material"
                 fullWidth
                 value={form.material}
-                onChange={(e) => setForm(f => ({ ...f, material: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, material: e.target.value }))}
+                disabled={saving}
               >
                 <MenuItem value=""><em>None</em></MenuItem>
                 {MATERIALS.map((mat) => (
-                  <MenuItem key={mat} value={mat}>{mat}</MenuItem>
+                  <MenuItem key={mat} value={mat}>
+                    {mat}
+                  </MenuItem>
                 ))}
               </TextField>
             </Stack>
-            <Stack direction="row" spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 select
                 label="Size"
                 fullWidth
                 value={form.size}
-                onChange={(e) => setForm(f => ({ ...f, size: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))}
+                disabled={saving}
               >
                 <MenuItem value=""><em>None</em></MenuItem>
                 {SIZES.map((sz) => (
-                  <MenuItem key={sz} value={sz}>{sz}</MenuItem>
+                  <MenuItem key={sz} value={sz}>
+                    {sz}
+                  </MenuItem>
                 ))}
               </TextField>
-              <TextField label="Color" fullWidth value={form.color}
-                onChange={(e) => setForm(f => ({ ...f, color: e.target.value }))} />
+              <TextField
+                label="Color"
+                fullWidth
+                value={form.color}
+                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
+                disabled={saving}
+              />
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setDialogOpen(false)} disabled={saving}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}
-            sx={{ fontWeight: 600 }}>
+          <Button onClick={() => setDialogOpen(false)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSave}
+            disabled={saving}
+            sx={{ fontWeight: 600 }}
+          >
             {saving ? 'Saving…' : editing ? 'Update Product' : 'Create Product'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={deleteDialog.open}
+        title="Delete Product"
+        message="Are you sure you want to delete this product? This action cannot be undone."
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteDialog({ open: false, id: null })}
+        confirmText="Delete"
+        confirmColor="error"
+        loading={false}
+      />
     </Box>
   );
 }
