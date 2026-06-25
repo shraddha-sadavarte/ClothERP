@@ -5,6 +5,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { usePermission } from '../../../hooks/usePermission';
 import { useToast } from '../../../hooks/useToast';
 import PageHeader from '../../../components/common/PageHeader';
+import { branchApi } from '../../branch/branchApi';
 import {
   Box,
   Typography,
@@ -30,6 +31,9 @@ import {
   LinearProgress,
   Grid,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import Inventory2 from '@mui/icons-material/Inventory2';
 import Warning from '@mui/icons-material/Warning';
@@ -65,8 +69,14 @@ export default function InventoryPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const canAdjust = usePermission('INVENTORY_ADJUST');
-  const branchId = user?.branchId;
+  const isSuperAdmin = usePermission('ALL');
 
+  // ── Branch selection ──
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState(user?.branchId || '');
+
+  // ── Data state ──
   const [tab, setTab] = useState(0);
   const [stock, setStock] = useState([]);
   const [lowStock, setLowStock] = useState([]);
@@ -74,6 +84,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Adjustment dialog
   const [adjOpen, setAdjOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [adjForm, setAdjForm] = useState({
@@ -88,7 +99,32 @@ export default function InventoryPage() {
 
   const mountedRef = useRef(true);
 
+  // ── Fetch branches if superadmin ──
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setBranchesLoading(false);
+      return;
+    }
+    branchApi
+      .listActive()
+      .then((res) => {
+        if (mountedRef.current) {
+          setBranches(res ?? []);
+          // Auto-select first branch if none selected
+          if (!selectedBranchId && res?.length > 0) {
+            setSelectedBranchId(res[0].id);
+          }
+        }
+      })
+      .catch(() => showToast('Failed to load branches', 'error'))
+      .finally(() => {
+        if (mountedRef.current) setBranchesLoading(false);
+      });
+  }, [isSuperAdmin, selectedBranchId, showToast]);
+
+  // ── Fetch inventory data ──
   const fetchAll = useCallback(async () => {
+    const branchId = selectedBranchId || user?.branchId;
     if (!branchId) {
       setLoading(false);
       return;
@@ -111,24 +147,26 @@ export default function InventoryPage() {
         setError(err.response?.data?.message || 'Failed to load inventory');
       }
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
-  }, [branchId]);
+  }, [selectedBranchId, user?.branchId]);
 
   useEffect(() => {
     mountedRef.current = true;
-    if (!branchId) {
-      setLoading(false);
-      return;
-    }
     fetchAll();
     return () => {
       mountedRef.current = false;
     };
-  }, [branchId, fetchAll]);
+  }, [fetchAll]);
 
+  // ── Branch change handler ──
+  const handleBranchChange = (e) => {
+    setSelectedBranchId(e.target.value);
+    setLoading(true);
+    // fetchAll will be triggered by the effect because selectedBranchId changed.
+  };
+
+  // ── Adjustment handlers ──
   const openAdjust = async () => {
     setAdjError('');
     setAdjForm({ productId: '', quantity: '', type: 'STOCK_IN', notes: '', rackLocation: '' });
@@ -144,12 +182,13 @@ export default function InventoryPage() {
   };
 
   const handleAdjust = async () => {
+    const branchId = selectedBranchId || user?.branchId;
     if (!adjForm.productId || !adjForm.quantity || !adjForm.type) {
       setAdjError('Product, Quantity and Type are required.');
       return;
     }
     if (!branchId) {
-      setAdjError('Your account has no branchId. Contact admin.');
+      setAdjError('No branch selected. Please select a branch.');
       return;
     }
     setAdjSaving(true);
@@ -165,7 +204,6 @@ export default function InventoryPage() {
       });
       setAdjOpen(false);
       showToast('Stock adjusted successfully', 'success');
-      // Refetch data
       setLoading(true);
       await fetchAll();
     } catch (err) {
@@ -175,7 +213,11 @@ export default function InventoryPage() {
     }
   };
 
-  if (!branchId) {
+  // ── Determine effective branch ID ──
+  const effectiveBranchId = selectedBranchId || user?.branchId;
+
+  // ── Show warning if no branch ID and not superadmin ──
+  if (!isSuperAdmin && !user?.branchId) {
     return (
       <Alert severity="warning" sx={{ mt: 2 }}>
         Your account has no <strong>branchId</strong> assigned. Ask an admin to set one before you can view inventory.
@@ -183,11 +225,16 @@ export default function InventoryPage() {
     );
   }
 
+  // ── Show loading state for branches ──
+  if (branchesLoading) {
+    return <CircularProgress />;
+  }
+
   return (
     <Box>
       <PageHeader
         title="Inventory"
-        subtitle="Stock levels and transaction history for your branch"
+        subtitle="Stock levels and transaction history"
         actions={
           canAdjust && (
             <Button
@@ -202,227 +249,224 @@ export default function InventoryPage() {
         }
       />
 
-      <Grid container spacing={2} mb={3}>
-        {[
-          { label: 'Total Products', value: stock.length, color: '#3b82f6', icon: <Inventory2 /> },
-          { label: 'Low Stock Alerts', value: lowStock.length, color: '#ef4444', icon: <Warning /> },
-        ].map((kpi) => (
-          <Grid item xs={12} sm={6} md={3} key={kpi.label}>
-            <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 2,
-                    bgcolor: kpi.color + '18',
-                    color: kpi.color,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {kpi.icon}
-                </Box>
-                <Box>
-                  <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">
-                    {kpi.label}
-                  </Typography>
-                  <Typography variant="h5" fontWeight={700}>
-                    {kpi.value}
-                  </Typography>
-                </Box>
-              </Stack>
-            </Paper>
+      {/* Branch selector for superadmin */}
+      {isSuperAdmin && (
+        <FormControl sx={{ mb: 3, minWidth: 200 }} size="small">
+          <InputLabel id="branch-select-label">Branch</InputLabel>
+          <Select
+            labelId="branch-select-label"
+            value={selectedBranchId}
+            label="Branch"
+            onChange={handleBranchChange}
+            disabled={loading}
+          >
+            {branches.map((b) => (
+              <MenuItem key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
+      {!effectiveBranchId ? (
+        <Alert severity="warning">
+          Please select a branch to view inventory.
+        </Alert>
+      ) : (
+        <>
+          {/* KPI strip */}
+          <Grid container spacing={2} mb={3}>
+            {[
+              { label: 'Total Products', value: stock.length, color: '#3b82f6', icon: <Inventory2 /> },
+              { label: 'Low Stock Alerts', value: lowStock.length, color: '#ef4444', icon: <Warning /> },
+            ].map((kpi) => (
+              <Grid item xs={12} sm={6} md={3} key={kpi.label}>
+                <Paper elevation={0} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Box sx={{ width: 48, height: 48, borderRadius: 2, bgcolor: kpi.color + '18', color: kpi.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {kpi.icon}
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase">
+                        {kpi.label}
+                      </Typography>
+                      <Typography variant="h5" fontWeight={700}>
+                        {kpi.value}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+              </Grid>
+            ))}
           </Grid>
-        ))}
-      </Grid>
 
-      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
-      {loading && <LinearProgress sx={{ mb: 2 }} />}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {loading && <LinearProgress sx={{ mb: 2 }} />}
 
-      <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 3 }}>
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ px: 2, borderBottom: '1px solid', borderColor: 'divider' }}
-        >
-          <Tab label={`Stock Levels (${stock.length})`} />
-          <Tab
-            label={`Low Stock (${lowStock.length})`}
-            sx={{ color: lowStock.length > 0 ? 'error.main' : undefined }}
-          />
-          <Tab label={`Transactions (${transactions.length})`} />
-        </Tabs>
+          {/* Tabs */}
+          <Paper elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 3 }}>
+            <Tabs
+              value={tab}
+              onChange={(_, v) => setTab(v)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{ px: 2, borderBottom: '1px solid', borderColor: 'divider' }}
+            >
+              <Tab label={`Stock Levels (${stock.length})`} />
+              <Tab
+                label={`Low Stock (${lowStock.length})`}
+                sx={{ color: lowStock.length > 0 ? 'error.main' : undefined }}
+              />
+              <Tab label={`Transactions (${transactions.length})`} />
+            </Tabs>
 
-        {tab === 0 && (
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table sx={{ minWidth: 600 }}>
-              <TableHead>
-                <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
-                  <TableCell>#</TableCell>
-                  <TableCell>Product</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Rack</TableCell>
-                  <TableCell>Stock Level</TableCell>
-                  <TableCell>Reserved</TableCell>
-                  <TableCell>Available</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && stock.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 5 }}>
-                      <CircularProgress size={28} />
-                    </TableCell>
-                  </TableRow>
-                ) : stock.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                      <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} />
-                      <br />
-                      No stock records found for this branch.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  stock.map((item, i) => (
-                    <TableRow key={item.id} hover>
-                      <TableCell>{i + 1}</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }}>{item.productName}</TableCell>
-                      <TableCell>
-                        <Chip label={item.productSku} size="small" variant="outlined" />
-                      </TableCell>
-                      <TableCell>{item.rackLocation || '—'}</TableCell>
-                      <TableCell>
-                        <StockBar qty={item.quantity} reserved={item.reservedQuantity} />
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={item.reservedQuantity} size="small" color="warning" variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={item.availableQuantity}
-                          size="small"
-                          color={item.availableQuantity < 5 ? 'error' : 'success'}
-                        />
-                      </TableCell>
+            {tab === 0 && (
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
+                      <TableCell>#</TableCell>
+                      <TableCell>Product</TableCell>
+                      <TableCell>SKU</TableCell>
+                      <TableCell>Rack</TableCell>
+                      <TableCell>Stock Level</TableCell>
+                      <TableCell>Reserved</TableCell>
+                      <TableCell>Available</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {loading && stock.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5 }}>
+                        <CircularProgress size={28} />
+                      </TableCell></TableRow>
+                    ) : stock.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                        <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} /><br />
+                        No stock records found for this branch.
+                      </TableCell></TableRow>
+                    ) : (
+                      stock.map((item, i) => (
+                        <TableRow key={item.id} hover>
+                          <TableCell>{i + 1}</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>{item.productName}</TableCell>
+                          <TableCell><Chip label={item.productSku} size="small" variant="outlined" /></TableCell>
+                          <TableCell>{item.rackLocation || '—'}</TableCell>
+                          <TableCell><StockBar qty={item.quantity} reserved={item.reservedQuantity} /></TableCell>
+                          <TableCell>
+                            <Chip label={item.reservedQuantity} size="small" color="warning" variant="outlined" />
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={item.availableQuantity}
+                              size="small"
+                              color={item.availableQuantity < 5 ? 'error' : 'success'}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
 
-        {tab === 1 && (
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table sx={{ minWidth: 600 }}>
-              <TableHead>
-                <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#fff3f3' } }}>
-                  <TableCell>Product</TableCell>
-                  <TableCell>SKU</TableCell>
-                  <TableCell>Available</TableCell>
-                  <TableCell>Reserved</TableCell>
-                  <TableCell>Total</TableCell>
-                  <TableCell>Rack</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && lowStock.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 5 }}>
-                      <CircularProgress size={28} />
-                    </TableCell>
-                  </TableRow>
-                ) : lowStock.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center" sx={{ py: 5, color: 'success.main' }}>
-                      ✅ No low-stock items — all products are sufficiently stocked.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  lowStock.map((item) => (
-                    <TableRow key={item.id} sx={{ bgcolor: '#fff8f8' }}>
-                      <TableCell sx={{ fontWeight: 600, color: 'error.main' }}>
-                        ⚠ {item.productName}
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={item.productSku} size="small" color="error" variant="outlined" />
-                      </TableCell>
-                      <TableCell>
-                        <Chip label={item.availableQuantity} size="small" color="error" />
-                      </TableCell>
-                      <TableCell>{item.reservedQuantity}</TableCell>
-                      <TableCell>{item.quantity}</TableCell>
-                      <TableCell>{item.rackLocation || '—'}</TableCell>
+            {tab === 1 && (
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: '#fff3f3' } }}>
+                      <TableCell>Product</TableCell>
+                      <TableCell>SKU</TableCell>
+                      <TableCell>Available</TableCell>
+                      <TableCell>Reserved</TableCell>
+                      <TableCell>Total</TableCell>
+                      <TableCell>Rack</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
+                  </TableHead>
+                  <TableBody>
+                    {loading && lowStock.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5 }}>
+                        <CircularProgress size={28} />
+                      </TableCell></TableRow>
+                    ) : lowStock.length === 0 ? (
+                      <TableRow><TableCell colSpan={6} align="center" sx={{ py: 5, color: 'success.main' }}>
+                        ✅ No low-stock items — all products are sufficiently stocked.
+                      </TableCell></TableRow>
+                    ) : (
+                      lowStock.map((item) => (
+                        <TableRow key={item.id} sx={{ bgcolor: '#fff8f8' }}>
+                          <TableCell sx={{ fontWeight: 600, color: 'error.main' }}>
+                            ⚠ {item.productName}
+                          </TableCell>
+                          <TableCell><Chip label={item.productSku} size="small" color="error" variant="outlined" /></TableCell>
+                          <TableCell><Chip label={item.availableQuantity} size="small" color="error" /></TableCell>
+                          <TableCell>{item.reservedQuantity}</TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>{item.rackLocation || '—'}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
 
-        {tab === 2 && (
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table sx={{ minWidth: 600 }}>
-              <TableHead>
-                <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
-                  <TableCell>Product</TableCell>
-                  <TableCell>Type</TableCell>
-                  <TableCell>Quantity</TableCell>
-                  <TableCell>Notes</TableCell>
-                  <TableCell>Date</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && transactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 5 }}>
-                      <CircularProgress size={28} />
-                    </TableCell>
-                  </TableRow>
-                ) : transactions.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                      No transactions yet.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  transactions.map((tx) => (
-                    <TableRow key={tx.id} hover>
-                      <TableCell sx={{ fontWeight: 600 }}>{tx.productName}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={tx.type}
-                          size="small"
-                          color={TYPE_COLOR[tx.type] || 'default'}
-                          variant="outlined"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography
-                          fontWeight={700}
-                          color={tx.type === 'STOCK_IN' || tx.type === 'TRANSFER_IN' ? 'success.main' : 'error.main'}
-                        >
-                          {tx.type === 'STOCK_IN' || tx.type === 'TRANSFER_IN' ? '+' : '-'}
-                          {tx.quantity}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{tx.notes || '—'}</TableCell>
-                      <TableCell>
-                        {tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-IN') : '—'}
-                      </TableCell>
+            {tab === 2 && (
+              <TableContainer sx={{ overflowX: 'auto' }}>
+                <Table sx={{ minWidth: 600 }}>
+                  <TableHead>
+                    <TableRow sx={{ '& th': { fontWeight: 700, bgcolor: 'action.hover' } }}>
+                      <TableCell>Product</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Quantity</TableCell>
+                      <TableCell>Notes</TableCell>
+                      <TableCell>Date</TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </Paper>
+                  </TableHead>
+                  <TableBody>
+                    {loading && transactions.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5 }}>
+                        <CircularProgress size={28} />
+                      </TableCell></TableRow>
+                    ) : transactions.length === 0 ? (
+                      <TableRow><TableCell colSpan={5} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                        No transactions yet.
+                      </TableCell></TableRow>
+                    ) : (
+                      transactions.map((tx) => (
+                        <TableRow key={tx.id} hover>
+                          <TableCell sx={{ fontWeight: 600 }}>{tx.productName}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={tx.type}
+                              size="small"
+                              color={TYPE_COLOR[tx.type] || 'default'}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography
+                              fontWeight={700}
+                              color={tx.type === 'STOCK_IN' || tx.type === 'TRANSFER_IN' ? 'success.main' : 'error.main'}
+                            >
+                              {tx.type === 'STOCK_IN' || tx.type === 'TRANSFER_IN' ? '+' : '-'}{tx.quantity}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>{tx.notes || '—'}</TableCell>
+                          <TableCell>
+                            {tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-IN') : '—'}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </Paper>
+        </>
+      )}
 
       {/* Adjust Stock Dialog */}
       <Dialog open={adjOpen} onClose={() => !adjSaving && setAdjOpen(false)} maxWidth="sm" fullWidth>
@@ -453,9 +497,7 @@ export default function InventoryPage() {
               disabled={adjSaving}
             >
               {ADJUST_TYPES.map((t) => (
-                <MenuItem key={t} value={t}>
-                  {t}
-                </MenuItem>
+                <MenuItem key={t} value={t}>{t}</MenuItem>
               ))}
             </TextField>
             <TextField
@@ -486,9 +528,7 @@ export default function InventoryPage() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setAdjOpen(false)} disabled={adjSaving}>
-            Cancel
-          </Button>
+          <Button onClick={() => setAdjOpen(false)} disabled={adjSaving}>Cancel</Button>
           <Button variant="contained" onClick={handleAdjust} disabled={adjSaving} sx={{ fontWeight: 600 }}>
             {adjSaving ? 'Saving…' : 'Apply Adjustment'}
           </Button>

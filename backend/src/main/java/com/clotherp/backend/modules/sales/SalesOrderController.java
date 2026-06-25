@@ -24,8 +24,9 @@ public class SalesOrderController {
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'OWNER', 'BRANCH_MANAGER', 'SALES_EXECUTIVE')")
     public ResponseEntity<ApiResponse<Page<SalesOrderDTO>>> getAllOrders(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        Page<SalesOrderDTO> page = salesOrderService.getAllOrders(pageable);
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(required = false) UUID branchId) {
+        Page<SalesOrderDTO> page = salesOrderService.getAllOrders(pageable, branchId);
         return ResponseEntity.ok(ApiResponse.ok(page));
     }
 

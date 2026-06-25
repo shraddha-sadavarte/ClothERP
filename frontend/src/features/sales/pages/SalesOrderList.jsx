@@ -5,40 +5,9 @@ import { useAuth } from '../../../hooks/useAuth';
 import { usePermission } from '../../../hooks/usePermission';
 import { useToast } from '../../../hooks/useToast';
 import PageHeader from '../../../components/common/PageHeader';
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableHead,
-  TableBody,
-  TableRow,
-  TableCell,
-  TableContainer,
-  TablePagination,
-  Button,
-  Chip,
-  CircularProgress,
-  Alert,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  Stack,
-  MenuItem,
-  Divider,
-  IconButton,
-  Tooltip,
-  Collapse,
-} from '@mui/material';
-import {
-  Add,
-  ExpandMore,
-  ExpandLess,
-  ShoppingCart,
-  DeleteOutlineOutlined,
-} from '@mui/icons-material';
+import { branchApi } from '../../branch/branchApi';
+import { Box, Typography, Paper, Table, TableHead, TableBody,TableCell, TableRow, TableContainer, TablePagination, Button, Chip, CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Stack, MenuItem, Divider, IconButton, Tooltip, Collapse, FormControl, InputLabel, Select, } from '@mui/material';
+import { Add, ExpandMore, ExpandLess, ShoppingCart, DeleteOutlineOutlined, } from '@mui/icons-material';
 
 // ── Status chip colours ─────────────────────────────────────────────────────
 const STATUS_COLOR = {
@@ -63,7 +32,7 @@ const ORDER_STATUSES = ['DRAFT', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERE
 const inr = (v) =>
   `₹${Number(v || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
-// ── Item row inside dialog ───────────────────────────────────────────────────
+// ── Item row inside dialog (pure component, no hooks) ──────────────────────
 function ItemRow({ item, products, onChange, onRemove }) {
   return (
     <Stack
@@ -129,8 +98,14 @@ export default function SalesOrderList() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const canCreate = usePermission('SALES_CREATE');
+  const isSuperAdmin = usePermission('ALL');
 
-  // ── State ──
+  // ── Branch state ──
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState(user?.branchId || '');
+
+  // ── Order state ──
   const [fetchState, setFetchState] = useState({
     orders: [],
     total: 0,
@@ -163,13 +138,36 @@ export default function SalesOrderList() {
 
   const mountedRef = useRef(true);
 
+  // ── Fetch branches if superadmin ──
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setBranchesLoading(false);
+      return;
+    }
+    branchApi
+      .listActive()
+      .then((res) => {
+        if (mountedRef.current) {
+          setBranches(res ?? []);
+          if (!selectedBranchId && res?.length > 0) {
+            setSelectedBranchId(res[0].id);
+          }
+        }
+      })
+      .catch(() => showToast('Failed to load branches', 'error'))
+      .finally(() => {
+        if (mountedRef.current) setBranchesLoading(false);
+      });
+  }, [isSuperAdmin, selectedBranchId, showToast]);
+
   // ── Data fetching effect ──
   useEffect(() => {
     mountedRef.current = true;
     const fetchOrders = async () => {
       setFetchState((prev) => ({ ...prev, loading: true, error: null }));
       try {
-        const d = await salesApi.listOrders(page, rowsPerPage);
+        const branchFilter = isSuperAdmin ? selectedBranchId : null;
+        const d = await salesApi.listOrders(page, rowsPerPage, branchFilter);
         if (mountedRef.current) {
           setFetchState({
             loading: false,
@@ -193,7 +191,7 @@ export default function SalesOrderList() {
     return () => {
       mountedRef.current = false;
     };
-  }, [page, rowsPerPage, refetchKey]);
+  }, [page, rowsPerPage, refetchKey, isSuperAdmin, selectedBranchId]);
 
   // ── Dialog handlers ──
   const openCreate = async () => {
@@ -233,19 +231,20 @@ export default function SalesOrderList() {
 
   // ── Create order ──
   const handleCreate = async () => {
+    const branchId = isSuperAdmin ? selectedBranchId : user?.branchId;
     if (items.some((it) => !it.productId || !it.quantity || !it.unitPrice)) {
       setDlgError('Fill in all item fields (Product, Qty, Price).');
       return;
     }
-    if (!user?.branchId) {
-      setDlgError('Your account has no branchId. Ask an admin to assign one.');
+    if (!branchId) {
+      setDlgError('No branch selected. Please select a branch.');
       return;
     }
     setSaving(true);
     setDlgError('');
     try {
       await salesApi.createOrder({
-        branchId: user.branchId,
+        branchId,
         notes,
         discountAmount: parseFloat(orderDiscount) || 0,
         taxAmount: parseFloat(orderTax) || 0,
@@ -300,6 +299,26 @@ export default function SalesOrderList() {
           )
         }
       />
+
+      {/* Branch selector for superadmin */}
+      {isSuperAdmin && (
+        <FormControl sx={{ mb: 2, minWidth: 200 }} size="small">
+          <InputLabel id="branch-select-label">Branch</InputLabel>
+          <Select
+            labelId="branch-select-label"
+            value={selectedBranchId}
+            label="Branch"
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            disabled={loading || branchesLoading}
+          >
+            {branches.map((b) => (
+              <MenuItem key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 

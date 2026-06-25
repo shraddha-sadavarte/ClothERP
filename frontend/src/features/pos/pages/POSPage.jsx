@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -20,6 +20,9 @@ import {
   Alert,
   CircularProgress,
   InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   Add,
@@ -31,9 +34,11 @@ import {
   Receipt,
 } from '@mui/icons-material';
 import { useAuth } from '../../../hooks/useAuth';
+import { usePermission } from '../../../hooks/usePermission';
 import { useToast } from '../../../hooks/useToast';
 import PageHeader from '../../../components/common/PageHeader';
 import { posApi } from '../posApi';
+import { branchApi } from '../../branch/branchApi';
 
 // ── Currency formatter ──
 const inr = (v) =>
@@ -45,9 +50,14 @@ const PAYMENT_METHODS = ['CASH', 'CARD', 'UPI', 'SPLIT'];
 export default function POSPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const branchId = user?.branchId;
+  const isSuperAdmin = usePermission('ALL');
 
-  // ── State ──
+  // ── Branch state (for superadmin) ──
+  const [branches, setBranches] = useState([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+  const [selectedBranchId, setSelectedBranchId] = useState(user?.branchId || '');
+
+  // ── POS state ──
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching, setSearching] = useState(false);
@@ -55,7 +65,6 @@ export default function POSPage() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [customers, setCustomers] = useState([]);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  //const [customerDialogOpen, setCustomerDialogOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [discount, setDiscount] = useState(0);
@@ -63,7 +72,29 @@ export default function POSPage() {
   const [orderComplete, setOrderComplete] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
 
-  //const mountedRef = useRef(true);
+  const mountedRef = useRef(true);
+
+  // ── Fetch branches if superadmin ──
+  useEffect(() => {
+    if (!isSuperAdmin) {
+      setBranchesLoading(false);
+      return;
+    }
+    branchApi
+      .listActive()
+      .then((res) => {
+        if (mountedRef.current) {
+          setBranches(res ?? []);
+          if (!selectedBranchId && res?.length > 0) {
+            setSelectedBranchId(res[0].id);
+          }
+        }
+      })
+      .catch(() => showToast('Failed to load branches', 'error'))
+      .finally(() => {
+        if (mountedRef.current) setBranchesLoading(false);
+      });
+  }, [isSuperAdmin, selectedBranchId, showToast]);
 
   // ── Product search ──
   const handleSearch = useCallback(async () => {
@@ -82,7 +113,6 @@ export default function POSPage() {
     }
   }, [search, showToast]);
 
-  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (search.trim()) handleSearch();
@@ -175,12 +205,13 @@ export default function POSPage() {
 
   // ── Checkout ──
   const handleCheckout = async () => {
+    const branchId = isSuperAdmin ? selectedBranchId : user?.branchId;
     if (cart.length === 0) {
       showToast('Cart is empty', 'warning');
       return;
     }
     if (!branchId) {
-      showToast('No branch assigned to your account', 'error');
+      showToast('No branch selected. Please select a branch.', 'error');
       return;
     }
     if (!paymentMethod) {
@@ -216,7 +247,9 @@ export default function POSPage() {
   };
 
   // ── Render ──
-  if (!branchId) {
+  const effectiveBranchId = isSuperAdmin ? selectedBranchId : user?.branchId;
+
+  if (!isSuperAdmin && !user?.branchId) {
     return (
       <Alert severity="warning">
         Your account has no <strong>branchId</strong> assigned. Please contact admin.
@@ -239,6 +272,31 @@ export default function POSPage() {
           </Button>
         }
       />
+
+      {isSuperAdmin && (
+        <FormControl sx={{ mb: 2, minWidth: 200 }} size="small">
+          <InputLabel id="branch-select-label">Branch</InputLabel>
+          <Select
+            labelId="branch-select-label"
+            value={selectedBranchId}
+            label="Branch"
+            onChange={(e) => setSelectedBranchId(e.target.value)}
+            disabled={branchesLoading}
+          >
+            {branches.map((b) => (
+              <MenuItem key={b.id} value={b.id}>
+                {b.name} ({b.code})
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      )}
+
+      {!effectiveBranchId && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Please select a branch to continue.
+        </Alert>
+      )}
 
       {orderComplete && lastOrder && (
         <Paper
@@ -610,7 +668,11 @@ export default function POSPage() {
             fullWidth
             variant="contained"
             size="large"
-            disabled={cart.length === 0 || checkoutLoading}
+            disabled={
+              cart.length === 0 ||
+              checkoutLoading ||
+              !effectiveBranchId
+            }
             onClick={handleCheckout}
             sx={{ py: 1.5, fontWeight: 700 }}
           >

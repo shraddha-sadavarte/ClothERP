@@ -23,10 +23,16 @@ public class SalesOrderService {
     private final SalesOrderRepository salesOrderRepository;
     private final ProductRepository productRepository;
 
+    // ✅ Use only this method – with branchId filter
     @Transactional(readOnly = true)
-    public Page<SalesOrderDTO> getAllOrders(Pageable pageable) {
-        return salesOrderRepository.findAllWithItemsAndProducts(pageable)
-                .map(this::mapToDTO);
+    public Page<SalesOrderDTO> getAllOrders(Pageable pageable, UUID branchId) {
+        Page<SalesOrder> orderPage;
+        if (branchId != null) {
+            orderPage = salesOrderRepository.findByBranchId(branchId, pageable);
+        } else {
+            orderPage = salesOrderRepository.findAllWithItemsAndProducts(pageable);
+        }
+        return orderPage.map(this::mapToDTO);
     }
 
     @Transactional(readOnly = true)

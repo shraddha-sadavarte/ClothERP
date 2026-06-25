@@ -18,4 +18,6 @@ public interface SalesOrderRepository extends JpaRepository<SalesOrder, UUID> {
 
     @Query("SELECT o FROM SalesOrder o JOIN FETCH o.items i JOIN FETCH i.product WHERE o.id = :id")
     Optional<SalesOrder> findByIdWithItemsAndProducts(@Param("id") UUID id);
+
+    Page<SalesOrder> findByBranchId(UUID branchId, Pageable pageable);
 }
