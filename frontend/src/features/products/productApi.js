@@ -2,8 +2,8 @@ import api from '../../services/api';
 
 export const productApi = {
   // GET /api/v1/products?page=0&size=20
-  listProducts: (page = 0, size = 20) =>
-    api.get('/products', { params: { page, size, sort: 'createdAt,desc' } }),
+  listProducts: (page = 0, size = 20, branchId = null) =>
+    api.get('/products', { params: { page, size, sort: 'createdAt,desc', ...(branchId && { branchId }) } }),
 
   // GET /api/v1/products/:id
   getById: (id) => api.get(`/products/${id}`),

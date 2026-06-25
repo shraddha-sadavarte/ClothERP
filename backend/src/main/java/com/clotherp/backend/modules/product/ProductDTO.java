@@ -24,6 +24,7 @@ public class ProductDTO {
     private String size;
     private String color;
     private String material;
+    private UUID branchId;       
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

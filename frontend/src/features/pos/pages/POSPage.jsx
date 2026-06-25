@@ -98,20 +98,25 @@ export default function POSPage() {
 
   // ── Product search ──
   const handleSearch = useCallback(async () => {
+    const branchId = isSuperAdmin ? selectedBranchId : user?.branchId;
     if (!search.trim()) {
       setSearchResults([]);
       return;
     }
+    if (!branchId) {
+      showToast('Please select a branch to search products.', 'warning');
+      return;
+    }
     setSearching(true);
     try {
-      const res = await posApi.searchProducts(search);
+      const res = await posApi.searchProducts(search, branchId); // ✅ pass branchId
       setSearchResults(res || []);
     } catch (err) {
       showToast('Failed to search products', err);
     } finally {
       setSearching(false);
     }
-  }, [search, showToast]);
+  }, [search, showToast, isSuperAdmin, selectedBranchId, user?.branchId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

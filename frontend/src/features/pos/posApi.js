@@ -2,8 +2,8 @@ import api from '../../services/api';
 
 export const posApi = {
   // GET /api/v1/pos/products?search=...
-  searchProducts: (search = '') =>
-    api.get('/pos/products', { params: { search } }),
+  searchProducts: (search, branchId) =>
+    api.get('/pos/products', { params: { search, branchId } }),
 
   // GET /api/v1/pos/customers?search=...
   searchCustomers: (search = '') =>

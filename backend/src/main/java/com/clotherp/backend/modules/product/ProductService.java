@@ -12,4 +12,6 @@ public interface ProductService {
     ProductDTO getProductBySku(String sku);
     Page<ProductDTO> getAllProducts(Pageable pageable);
     void deleteProduct(UUID id);
+    Page<ProductDTO> getAllProducts(Pageable pageable, UUID branchId);
+    Page<ProductDTO> searchProducts(String search, Pageable pageable, UUID branchId);
 }

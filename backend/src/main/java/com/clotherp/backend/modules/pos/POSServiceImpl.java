@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -28,18 +29,14 @@ public class POSServiceImpl implements POSService {
     private final SalesOrderService salesOrderService;
 
     @Override
-    @Transactional(readOnly = true)
-    public List<ProductSearchDTO> searchProducts(String search) {
+    public List<ProductSearchDTO> searchProducts(String search, UUID branchId) {
         List<Product> products;
         if (search == null || search.trim().isEmpty()) {
-            products = productRepository.findAll();
+            products = productRepository.findByBranchId(branchId);
         } else {
-            // You'll need to add custom search method to ProductRepository
-            products = productRepository.findByNameContainingOrSkuContaining(search, search);
+            products = productRepository.findByBranchIdAndSearchIgnoreCase(branchId, search);
         }
-        return products.stream()
-                .map(this::toProductSearchDTO)
-                .collect(Collectors.toList());
+        return products.stream().map(this::toProductSearchDTO).collect(Collectors.toList());
     }
 
     @Override

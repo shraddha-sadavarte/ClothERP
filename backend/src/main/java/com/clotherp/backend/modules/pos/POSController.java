@@ -6,8 +6,10 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import com.clotherp.backend.security.UserPrincipal;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,8 +27,12 @@ public class POSController {
      */
     @GetMapping("/products")
     public ResponseEntity<ApiResponse<List<ProductSearchDTO>>> searchProducts(
-            @RequestParam(required = false) String search) {
-        return ResponseEntity.ok(ApiResponse.ok(posService.searchProducts(search)));
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) UUID branchId) {
+        if (branchId == null) {
+            branchId = ((UserPrincipal) SecurityContextHolder.getContext().getAuthentication().getPrincipal()).getBranchId();
+        }
+        return ResponseEntity.ok(ApiResponse.ok(posService.searchProducts(search, branchId)));
     }
 
     /**

@@ -32,6 +32,7 @@ public class BranchServiceImpl implements BranchService {
             throw new BusinessException("Branch code already exists: " + dto.getCode());
         }
         Branch branch = toEntity(dto);
+        branch.setActive(true);
         return toDTO(branchRepository.save(branch));
     }
 

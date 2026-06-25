@@ -23,6 +23,10 @@ public class ProductServiceImpl implements ProductService {
             throw new BusinessException("Product with SKU '" + request.getSku() + "' already exists.");
         }
         Product product = toEntity(request);
+        // ensure branchId is set
+        if (product.getBranchId() == null) {
+            throw new BusinessException("Branch ID is required for product creation.");
+        }
         return toDTO(productRepository.save(product));
     }
 
@@ -38,6 +42,7 @@ public class ProductServiceImpl implements ProductService {
         product.setSize(request.getSize());
         product.setColor(request.getColor());
         product.setMaterial(request.getMaterial());
+        // branchId cannot be changed via update
         return toDTO(productRepository.save(product));
     }
 
@@ -64,6 +69,25 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<ProductDTO> getAllProducts(Pageable pageable, UUID branchId) {
+        if (branchId == null) {
+            return getAllProducts(pageable);
+        }
+        return productRepository.findByBranchId(branchId, pageable).map(this::toDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductDTO> searchProducts(String search, Pageable pageable, UUID branchId) {
+        if (branchId == null) {
+            // if no branch, search all products (but we should restrict)
+            return productRepository.findAll(pageable).map(this::toDTO);
+        }
+        return productRepository.searchByBranchAndKeyword(branchId, search, pageable).map(this::toDTO);
+    }
+
+    @Override
     public void deleteProduct(UUID id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
@@ -85,6 +109,7 @@ public class ProductServiceImpl implements ProductService {
                 .size(p.getSize())
                 .color(p.getColor())
                 .material(p.getMaterial())
+                .branchId(p.getBranchId())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
                 .build();
@@ -101,6 +126,7 @@ public class ProductServiceImpl implements ProductService {
                 .size(dto.getSize())
                 .color(dto.getColor())
                 .material(dto.getMaterial())
+                .branchId(dto.getBranchId())
                 .build();
     }
 }

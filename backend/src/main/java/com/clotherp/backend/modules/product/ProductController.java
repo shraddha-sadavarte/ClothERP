@@ -1,6 +1,8 @@
 package com.clotherp.backend.modules.product;
 
 import com.clotherp.backend.common.ApiResponse;
+import com.clotherp.backend.security.UserPrincipal;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -9,7 +11,10 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
@@ -27,9 +32,19 @@ public class ProductController {
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'OWNER')")
     public ResponseEntity<ApiResponse<ProductDTO>> createProduct(@Valid @RequestBody ProductDTO request) {
+        // If user is superadmin, use the branch from request; otherwise use user's branch
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
+        if (request.getBranchId() == null) {
+            request.setBranchId(userPrincipal.getBranchId());
+        }
+        // Validate that the user can create for that branch
+        boolean isSuperAdmin = userPrincipal.getAuthorities().stream().anyMatch(g -> g.getAuthority().equals("ROLE_SUPER_ADMIN"));
+        if (!isSuperAdmin && !userPrincipal.getBranchId().equals(request.getBranchId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Cannot create product for another branch");
+        }
         ProductDTO created = productService.createProduct(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.ok(created, "Product created successfully"));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok(created, "Product created successfully"));
     }
 
     /**
@@ -38,8 +53,19 @@ public class ProductController {
      */
     @GetMapping
     public ResponseEntity<ApiResponse<Page<ProductDTO>>> getAllProducts(
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        Page<ProductDTO> products = productService.getAllProducts(pageable);
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable,
+            @RequestParam(required = false) UUID branchId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UserPrincipal userPrincipal = (UserPrincipal) auth.getPrincipal();
+        boolean isSuperAdmin = userPrincipal.getAuthorities().stream()
+                .anyMatch(g -> g.getAuthority().equals("ROLE_SUPER_ADMIN"));
+
+        UUID effectiveBranchId = branchId;
+        if (effectiveBranchId == null && !isSuperAdmin) {
+            effectiveBranchId = userPrincipal.getBranchId();
+        }
+        // if superadmin and no branchId provided, return all products (or filter by selected branch)
+        Page<ProductDTO> products = productService.getAllProducts(pageable, effectiveBranchId);
         return ResponseEntity.ok(ApiResponse.ok(products));
     }
 

@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import org.hibernate.annotations.Where;
 
@@ -46,4 +47,7 @@ public class Product extends BaseEntity {
     private String color;
 
     private String material;
+
+    @Column(name = "branch_id")
+    private UUID branchId;
 }

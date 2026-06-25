@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Paper,
@@ -44,7 +44,7 @@ export default function BranchList() {
   const isSuperAdmin = usePermission('ALL');
 
   const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true); // ✅ start as true
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -58,36 +58,42 @@ export default function BranchList() {
 
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
 
-  // ✅ Fixed effect: no synchronous setState
-  useEffect(() => {
-    let isMounted = true;
+  // Force re‑fetch when this changes
+  const [refetchKey, setRefetchKey] = useState(0);
 
-    const fetchBranches = async () => {
-      setError(null);
-      try {
-        const data = await branchApi.listActive();
-        if (isMounted) {
-          setBranches(data || []);
-          setTotal(data?.length || 0);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err.response?.data?.message || 'Failed to load branches');
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+  const mountedRef = useRef(true);
+
+  // ── Fetch branches ──
+  const fetchBranches = useCallback(async () => {
+    setError(null);
+    try {
+      const data = await branchApi.listActive();
+      console.log('Fetched branches:', data); // Debug: check what the API returns
+      if (mountedRef.current) {
+        const branchArray = Array.isArray(data) ? data : [];
+        setBranches(branchArray);
+        setTotal(branchArray.length);
       }
-    };
+    } catch (err) {
+      console.error('Error fetching branches:', err);
+      if (mountedRef.current) {
+        setError(err.response?.data?.message || 'Failed to load branches');
+      }
+    } finally {
+      if (mountedRef.current) setLoading(false);
+    }
+  }, []);
 
+  // Re‑fetch when component mounts or refetchKey changes
+  useEffect(() => {
+    mountedRef.current = true;
     fetchBranches();
-
     return () => {
-      isMounted = false;
+      mountedRef.current = false;
     };
-  }, []); // ✅ empty dependency – runs once on mount
+  }, [fetchBranches, refetchKey]);
 
+  // ── Dialog handlers ──
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
@@ -126,16 +132,12 @@ export default function BranchList() {
         showToast('Branch created successfully', 'success');
       }
       setDialogOpen(false);
-      // Refetch – manually trigger by re‑running effect? We'll just call fetch again.
-      // To avoid duplication, we can extract fetch logic to a separate function and call it.
-      // For simplicity, we'll reload the page data by resetting loading and fetching again.
-      setLoading(true);
-      const data = await branchApi.listActive();
-      setBranches(data || []);
-      setTotal(data?.length || 0);
-      setLoading(false);
+      // ✅ Force refetch
+      setRefetchKey((prev) => prev + 1);
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to save branch');
+      const msg = err.response?.data?.message || err.message || 'Failed to save branch';
+      setFormError(msg);
+      showToast(msg, 'error');
     } finally {
       setSaving(false);
     }
@@ -145,20 +147,15 @@ export default function BranchList() {
     try {
       await branchApi.deactivate(deleteDialog.id);
       showToast('Branch deactivated', 'success');
-      // Refetch
-      setLoading(true);
-      const data = await branchApi.listActive();
-      setBranches(data || []);
-      setTotal(data?.length || 0);
-      setLoading(false);
+      setRefetchKey((prev) => prev + 1);
     } catch (err) {
-      showToast(err.response?.data?.message || 'Delete failed', 'error');
+      const msg = err.response?.data?.message || 'Delete failed';
+      showToast(msg, 'error');
     } finally {
       setDeleteDialog({ open: false, id: null });
     }
   };
 
-  // Client‑side pagination
   const paginatedBranches = branches.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage
@@ -168,9 +165,7 @@ export default function BranchList() {
     return (
       <Box>
         <PageHeader title="Access Denied" />
-        <Alert severity="warning">
-          Only SUPER_ADMIN can manage branches.
-        </Alert>
+        <Alert severity="warning">Only SUPER_ADMIN can manage branches.</Alert>
       </Box>
     );
   }
@@ -264,7 +259,7 @@ export default function BranchList() {
       </Paper>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={dialogOpen} onClose={() => !saving && setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle sx={{ fontWeight: 700 }}>
           {editing ? 'Edit Branch' : 'Add New Branch'}
         </DialogTitle>
@@ -275,14 +270,15 @@ export default function BranchList() {
               label="Branch Name *"
               fullWidth
               value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              disabled={saving}
             />
             <TextField
               label="Branch Code *"
               fullWidth
               value={form.code}
-              onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))}
-              disabled={!!editing}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              disabled={!!editing || saving}
               helperText={editing ? 'Code cannot be changed' : ''}
             />
             <TextField
@@ -291,20 +287,23 @@ export default function BranchList() {
               multiline
               rows={2}
               value={form.address}
-              onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+              disabled={saving}
             />
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
                 label="City"
                 fullWidth
                 value={form.city}
-                onChange={(e) => setForm(f => ({ ...f, city: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, city: e.target.value }))}
+                disabled={saving}
               />
               <TextField
                 label="State"
                 fullWidth
                 value={form.state}
-                onChange={(e) => setForm(f => ({ ...f, state: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, state: e.target.value }))}
+                disabled={saving}
               />
             </Stack>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -312,13 +311,15 @@ export default function BranchList() {
                 label="PIN Code"
                 fullWidth
                 value={form.pinCode}
-                onChange={(e) => setForm(f => ({ ...f, pinCode: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, pinCode: e.target.value }))}
+                disabled={saving}
               />
               <TextField
                 label="Phone"
                 fullWidth
                 value={form.phone}
-                onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                disabled={saving}
               />
             </Stack>
           </Stack>
