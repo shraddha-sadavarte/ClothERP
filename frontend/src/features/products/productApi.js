@@ -1,3 +1,4 @@
+// frontend/src/features/products/productApi.js
 import api from '../../services/api';
 
 export const productApi = {
@@ -19,4 +20,21 @@ export const productApi = {
 
   // DELETE /api/v1/products/:id
   delete: (id) => api.delete(`/products/${id}`),
+
+  // Import products from Excel
+  importProducts: (formData) => {
+    return api.post('/products/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  // ✅ Download template
+  downloadTemplate: () => {
+    console.log('📥 Downloading template...');
+    return api.get('/templates/product-import', {
+      responseType: 'blob',
+    });
+  },
 };

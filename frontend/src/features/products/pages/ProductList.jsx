@@ -7,6 +7,7 @@ import { usePermission } from '../../../hooks/usePermission';
 import { useToast } from '../../../hooks/useToast';
 import PageHeader from '../../../components/common/PageHeader';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import ImportDialog from '../components/ImportDialog';
 import {
   Box,
   Paper,
@@ -37,7 +38,15 @@ import {
   InputLabel,
   Select,
 } from '@mui/material';
-import { Add, Search, Edit, Inventory2, Delete } from '@mui/icons-material';
+import {
+  Add,
+  Search,
+  Edit,
+  Inventory2,
+  Delete,
+  Upload as UploadIcon,
+  Download as DownloadIcon, // ✅ Added DownloadIcon
+} from '@mui/icons-material';
 
 const CATEGORIES = ['Menswear', 'Womenswear', 'Kidswear', 'Accessories', 'Footwear'];
 const MATERIALS = ['Cotton', 'Polyester', 'Wool', 'Silk', 'Denim', 'Leather', 'Synthetic', 'Blend'];
@@ -85,6 +94,10 @@ export default function ProductList() {
   const [saving, setSaving] = useState(false);
 
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: null });
+
+  // ── Import state ──
+  const [openImport, setOpenImport] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
 
   const mountedRef = useRef(true);
 
@@ -136,6 +149,98 @@ export default function ProductList() {
       mountedRef.current = false;
     };
   }, [fetchProducts]);
+
+  // ── Handle Import ──
+  const handleImport = async (file) => {
+    console.log('1️⃣ handleImport called with file:', file);
+
+    setImportLoading(true);
+    try {
+      console.log('2️⃣ Creating FormData...');
+      const formData = new FormData();
+      formData.append('file', file);
+      console.log('3️⃣ FormData created, file appended');
+
+      console.log('4️⃣ Calling productApi.importProducts...');
+      const result = await productApi.importProducts(formData);
+      console.log('5️⃣ Result received:', result);
+
+      if (result && result.success !== undefined) {
+        if (result.success) {
+          const data = result.data || {};
+          const successCount = data.successCount || 0;
+          const errors = data.errors || [];
+
+          if (errors && errors.length > 0) {
+            showToast(`Imported ${successCount} products with ${errors.length} errors`, 'warning');
+            console.log('Import errors:', errors);
+          } else {
+            showToast(`Successfully imported ${successCount} products!`, 'success');
+          }
+
+          setOpenImport(false);
+          setLoading(true);
+          await fetchProducts();
+        } else {
+          showToast(result.message || 'Import failed', 'error');
+        }
+      } else {
+        showToast('Products imported successfully!', 'success');
+        setOpenImport(false);
+        setLoading(true);
+        await fetchProducts();
+      }
+    } catch (error) {
+      console.error('6️⃣ ERROR:', error);
+      console.error('Error response:', error.response);
+
+      let errorMsg = 'Failed to import products';
+      if (error.response?.data?.message) {
+        errorMsg = error.response.data.message;
+      } else if (error.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
+      showToast(errorMsg, 'error');
+    } finally {
+      setImportLoading(false);
+      console.log('7️⃣ Import complete');
+    }
+  };
+
+  // ── Handle Template Download ──
+  const handleDownloadTemplate = async () => {
+    try {
+      console.log('📥 Downloading template...');
+      const blob = await productApi.downloadTemplate();
+      console.log('📥 Blob received:', blob);
+
+      // Check if we got a Blob
+      if (!(blob instanceof Blob)) {
+        console.error('❌ Response is not a Blob:', blob);
+        showToast('Invalid response format', 'error');
+        return;
+      }
+
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'product-import-template.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      showToast('Template downloaded successfully!', 'success');
+    } catch (error) {
+      console.error('❌ Download error:', error);
+      console.error('❌ Error details:', error.response || error.message);
+      showToast('Failed to download template', 'error');
+    }
+  };
 
   // ── Dialog handlers ──
   const openCreate = () => {
@@ -239,8 +344,8 @@ export default function ProductList() {
   const displayed = products.filter((p) =>
     search
       ? p.name?.toLowerCase().includes(search.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(search.toLowerCase()) ||
-        p.category?.toLowerCase().includes(search.toLowerCase())
+      p.sku?.toLowerCase().includes(search.toLowerCase()) ||
+      p.category?.toLowerCase().includes(search.toLowerCase())
       : true
   );
 
@@ -250,11 +355,30 @@ export default function ProductList() {
         title="Products"
         subtitle="Manage your product catalogue"
         actions={
-          canCreate && (
-            <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
-              Add Product
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {/* ✅ Download Template Button - Now outside Import Dialog */}
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadTemplate}
+            >
+              Download Template
             </Button>
-          )
+
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => setOpenImport(true)}
+            >
+              Import
+            </Button>
+
+            {canCreate && (
+              <Button variant="contained" startIcon={<Add />} onClick={openCreate}>
+                Add Product
+              </Button>
+            )}
+          </Box>
         }
       />
 
@@ -305,21 +429,25 @@ export default function ProductList() {
                 <TableCell>Category</TableCell>
                 <TableCell>Size</TableCell>
                 <TableCell>Color</TableCell>
-                <TableCell>Price (₹)</TableCell>
-                <TableCell>Cost (₹)</TableCell>
+                <TableCell align="right">Price (₹)</TableCell>
+                <TableCell align="right">Cost (₹)</TableCell>
                 {(canCreate || isSuperAdmin) && <TableCell align="center">Actions</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
               {loading && displayed.length === 0 ? (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5 }}>
-                  <CircularProgress size={28} />
-                </TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5 }}>
+                    <CircularProgress size={28} />
+                  </TableCell>
+                </TableRow>
               ) : displayed.length === 0 ? (
-                <TableRow><TableCell colSpan={9} align="center" sx={{ py: 5, color: 'text.secondary' }}>
-                  <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} /><br />
-                  No products found
-                </TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={9} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                    <Inventory2 sx={{ fontSize: 40, opacity: 0.3, mb: 1 }} /><br />
+                    No products found
+                  </TableCell>
+                </TableRow>
               ) : (
                 displayed.map((p, i) => (
                   <TableRow key={p.id} hover>
@@ -329,10 +457,10 @@ export default function ProductList() {
                     <TableCell>{p.category || '—'}</TableCell>
                     <TableCell>{p.size || '—'}</TableCell>
                     <TableCell>{p.color || '—'}</TableCell>
-                    <TableCell sx={{ fontWeight: 600, color: 'success.main' }}>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: 'success.main' }}>
                       ₹{Number(p.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </TableCell>
-                    <TableCell>
+                    <TableCell align="right">
                       ₹{Number(p.cost).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </TableCell>
                     {(canCreate || isSuperAdmin) && (
@@ -542,6 +670,14 @@ export default function ProductList() {
         onCancel={() => setDeleteDialog({ open: false, id: null })}
         confirmText="Delete"
         confirmColor="error"
+      />
+
+      {/* Import Dialog - Removed onDownloadTemplate since it's now on the main page */}
+      <ImportDialog
+        open={openImport}
+        onClose={() => setOpenImport(false)}
+        onImport={handleImport}
+        loading={importLoading}
       />
     </Box>
   );

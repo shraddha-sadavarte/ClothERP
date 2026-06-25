@@ -1,3 +1,4 @@
+// frontend/src/services/api.js
 import axios from 'axios';
 import { store } from '../app/store';
 import { setTokens, logout } from '../features/auth/authSlice';
@@ -19,20 +20,32 @@ let queue = [];
 
 api.interceptors.response.use(
   (response) => {
+    // ✅ Check if it's a blob response - return as is
+    if (response.config.responseType === 'blob') {
+      console.log('📥 Blob response detected, returning raw data');
+      return response.data;
+    }
+
+    // ✅ Check if it's an arraybuffer response
+    if (response.config.responseType === 'arraybuffer') {
+      return response.data;
+    }
+
     // Always unwrap the data from ApiResponse if it's a success
-    if (response.data && response.data.success) {
-      return response.data.data;   // ✅ payload only
+    if (response.data && response.data.success !== undefined) {
+      if (response.data.success) {
+        return response.data.data; // ✅ payload only
+      } else {
+        // If success is false, treat as an error
+        return Promise.reject({
+          response: {
+            data: response.data,
+            status: response.data.statusCode || 500,
+          },
+        });
+      }
     }
-    // If success is false, treat as an error
-    if (response.data && !response.data.success) {
-      return Promise.reject({
-        response: {
-          data: response.data,
-          status: response.data.statusCode || 500,
-        },
-      });
-    }
-    // Fallback (should not happen)
+    // Fallback
     return response.data;
   },
   async (error) => {
